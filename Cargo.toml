@@ -2,6 +2,7 @@
 name = "vote"
 version = "0.1.0"
 edition = "2021"
+resolver = "2"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -17,7 +18,10 @@ leptos = { version = "0.3", default-features = false, features = [
 leptos_meta = { version = "0.3", default-features = false }
 leptos_actix = { version = "0.3", optional = true }
 leptos_router = { version = "0.3", default-features = false }
-wasm-bindgen = "=0.2.84"
+wasm-bindgen = "=0.2.86"
+serde = { version = "1.0", features = ["derive"] }
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1.25", features = ["full"], optional = true }
 
 [features]
 csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]
