@@ -89,3 +89,29 @@ pub async fn create_access_token(input: OAuth2PasswordRequest) -> Result<Token, 
     let token = resp.json::<Token>().await.unwrap();
     Ok(token)
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SignupInput {
+    pub username: String,
+    pub email: String,
+    pub password: String,
+}
+
+#[server(Signup, "/api")]
+pub async fn signup(input: SignupInput) -> Result<(), ServerFnError> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{BASE_URL}/user/signup"))
+        .json(&input)
+        .send()
+        .await
+        .unwrap();
+
+    if resp.status() != reqwest::StatusCode::OK {
+        return Err(ServerFnError::ServerError(format!(
+            "signup failed: {resp:?}"
+        )));
+    }
+
+    Ok(())
+}

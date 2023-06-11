@@ -5,7 +5,7 @@ use leptos_router::*;
 
 use crate::api::{
     get_topics, CreateAccessToken, CreateOptionInput, CreateTopic, CreateTopicInput,
-    OAuth2PasswordRequest,
+    OAuth2PasswordRequest, Signup, SignupInput,
 };
 
 use crate::state::GlobalState;
@@ -32,6 +32,7 @@ pub fn App(cx: Scope) -> impl IntoView {
                     <Route path="" view=|cx| view! { cx, <HomePage/> }/>
                     <Route path="/topic/create" view=|cx| view! { cx, <CreateTopicPage/> }/>
                     <Route path="/login" view=|cx| view! { cx, <LoginPage/> }/>
+                    <Route path="/signup" view=|cx| view! { cx, <SignupPage/> }/>
                 </Routes>
             </main>
         </Router>
@@ -162,6 +163,58 @@ fn LoginPage(cx: Scope) -> impl IntoView {
                 _ = goto("/", NavigateOptions::default());
             }
             Err(_) => {}
+        })}
+    }
+}
+
+#[component]
+fn SignupPage(cx: Scope) -> impl IntoView {
+    use leptos::html::Input;
+
+    let username: NodeRef<Input> = create_node_ref(cx);
+    let password: NodeRef<Input> = create_node_ref(cx);
+    let email: NodeRef<Input> = create_node_ref(cx);
+    let goto = use_navigate(cx);
+    let signup = create_server_action::<Signup>(cx);
+    let signup_result = signup.value();
+
+    let on_submit = move |ev: SubmitEvent| {
+        ev.prevent_default();
+
+        let username = username().expect("<input> to exist").value();
+        let password = password().expect("<input> to exist").value();
+        let email = email().expect("<input> to exist").value();
+
+        let input = SignupInput {
+            username,
+            password,
+            email,
+        };
+
+        signup.dispatch(Signup { input });
+    };
+
+    view! { cx,
+        <p>"Signup"</p>
+        <form on:submit=on_submit>
+            <label for="username">"Username"</label>
+            <input name="username" type="text" node_ref=username />
+            <br />
+
+            <label for="password">"Password"</label>
+            <input name="password" type="password" node_ref=password />
+            <br />
+
+            <label for="email">"Email"</label>
+            <input name="email" type="email" node_ref=email />
+            <br />
+
+            <input type="submit" value="Signup" />
+        </form>
+
+        {move || signup_result().map(|r| if r.is_ok() {
+            // FIXME: error handling
+            let _ = goto("/login", NavigateOptions::default());
         })}
     }
 }
