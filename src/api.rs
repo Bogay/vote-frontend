@@ -60,3 +60,32 @@ pub async fn create_topic(input: CreateTopicInput) -> Result<(), ServerFnError> 
 
     Ok(())
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OAuth2PasswordRequest {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Token {
+    pub access_token: String,
+    pub token_type: String,
+}
+
+#[server(CreateAccessToken, "/api")]
+pub async fn create_access_token(input: OAuth2PasswordRequest) -> Result<Token, ServerFnError> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{BASE_URL}/auth/token"))
+        .form(&input)
+        .send()
+        .await
+        .unwrap();
+    if resp.status() != reqwest::StatusCode::OK {
+        return Err((ServerFnError::ServerError(format!("login failed: {resp:?}"))));
+    }
+
+    let token = resp.json::<Token>().await.unwrap();
+    Ok(token)
+}

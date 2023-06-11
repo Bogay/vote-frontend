@@ -3,12 +3,19 @@ use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
 
-use crate::api::{get_topics, CreateOptionInput, CreateTopic, CreateTopicInput};
+use crate::api::{
+    get_topics, CreateAccessToken, CreateOptionInput, CreateTopic, CreateTopicInput,
+    OAuth2PasswordRequest,
+};
+
+use crate::state::GlobalState;
 
 #[component]
 pub fn App(cx: Scope) -> impl IntoView {
     // Provides context that manages stylesheets, titles, meta tags, etc.
     provide_meta_context(cx);
+
+    provide_context(cx, create_rw_signal(cx, GlobalState::new(cx)));
 
     view! { cx,
         // injects a stylesheet into the document <head>
@@ -24,6 +31,7 @@ pub fn App(cx: Scope) -> impl IntoView {
                 <Routes>
                     <Route path="" view=|cx| view! { cx, <HomePage/> }/>
                     <Route path="/topic/create" view=|cx| view! { cx, <CreateTopicPage/> }/>
+                    <Route path="/login" view=|cx| view! { cx, <LoginPage/> }/>
                 </Routes>
             </main>
         </Router>
@@ -108,5 +116,52 @@ fn CreateTopicPage(cx: Scope) -> impl IntoView {
 
             <input type="submit" value="Submit!" />
         </form>
+    }
+}
+
+#[component]
+fn LoginPage(cx: Scope) -> impl IntoView {
+    use leptos::html::Input;
+
+    let username: NodeRef<Input> = create_node_ref(cx);
+    let password: NodeRef<Input> = create_node_ref(cx);
+    let goto = use_navigate(cx);
+    let create_access_token = create_server_action::<CreateAccessToken>(cx);
+    let token = create_access_token.value();
+    let state = expect_context::<RwSignal<GlobalState>>(cx);
+
+    let on_submit = move |ev: SubmitEvent| {
+        ev.prevent_default();
+
+        let username = username().expect("<input> to exist").value();
+        let password = password().expect("<input> to exist").value();
+
+        let input = OAuth2PasswordRequest { username, password };
+
+        create_access_token.dispatch(CreateAccessToken { input });
+    };
+
+    view! { cx,
+        <p>"Login"</p>
+        <form on:submit=on_submit>
+            <label for="username">"Username"</label>
+            <input name="username" type="text" node_ref=username />
+            <br />
+
+            <label for="password">"Password"</label>
+            <input name="password" type="password" node_ref=password />
+            <br />
+
+            <input type="submit" value="Login" />
+        </form>
+
+        {move || token().map(|token| match token {
+            Ok(token) => {
+                state.update(|s| s.set_token(token.access_token));
+                // FIXME: handle navigate error
+                _ = goto("/", NavigateOptions::default());
+            }
+            Err(_) => {}
+        })}
     }
 }
