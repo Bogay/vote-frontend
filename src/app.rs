@@ -97,24 +97,33 @@ fn NavBar(cx: Scope) -> impl IntoView {
 #[component]
 fn HomePage(cx: Scope) -> impl IntoView {
     let topics = create_resource(cx, || (), |_| async move { get_topics().await });
+    // FIXME: error handling
     let topics = move || topics.read(cx).map(|topics| topics.unwrap());
+    let topics = move || match topics() {
+        None => view! { cx, <p>"Loading..."</p> }.into_view(cx),
+        Some(data) => data
+            .into_iter()
+            .map(|topic| {
+                view! { cx,
+                    <li class="mb-4">
+                        <div class="text-3xl font-semibold">{topic.description}</div>
+                        <div class="text-gray-600">"Starts at: "{topic.starts_at}</div>
+                        <div class="text-gray-600">"Ends at: "{topic.ends_at}</div>
+                        <div class="text-gray-600">"Created at: "{topic.created_at}</div>
+                        <div class="text-gray-600">"Updated at: "{topic.updated_at}</div>
+                        <div class="text-gray-600">"Stage: "{topic.stage}</div>
+                    </li>
+                }
+                .into_view(cx)
+            })
+            .collect_view(cx),
+    };
 
     view! { cx,
         <Transition
             fallback=move || view! { cx, <p>"Loading..."</p>}
         >
-            {match topics() {
-                None => {
-                    view! { cx, <p>"Loading..."</p> }
-                        .into_view(cx)
-                },
-                Some(data) => {
-                    data.into_iter().map(|topic| {
-                        view! { cx, <p>{topic.id}</p> }
-                            .into_view(cx)
-                    }).collect_view(cx)
-                }
-            }}
+            {topics}
         </Transition>
     }
 }
