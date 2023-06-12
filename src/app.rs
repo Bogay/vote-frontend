@@ -189,34 +189,59 @@ fn LoginPage(cx: Scope) -> impl IntoView {
 
         let username = username().expect("<input> to exist").value();
         let password = password().expect("<input> to exist").value();
-
         let input = OAuth2PasswordRequest { username, password };
 
         create_access_token.dispatch(CreateAccessToken { input });
     };
 
+    let label_style = "block text-gray-700 text-sm font-medium mb-2";
+    let input_style = "w-full border-gray-300 rounded-md p-2";
+
     view! { cx,
-        <p>"Login"</p>
-        <form on:submit=on_submit>
-            <label for="username">"Username"</label>
-            <input name="username" type="text" node_ref=username />
-            <br />
+        <div class="max-w-md mx-auto mt-8">
+            <div class="bg-white rounded-lg shadow-md p-8">
+                <h2 class="text-2xl font-semibold mb-6">"Login"</h2>
+                <form on:submit=on_submit>
+                    <div class="mb-4">
+                        <label for="username" class=label_style>"Username / Email"</label>
+                        <input type="username" node_ref=username class=input_style required />
+                    </div>
+                    <div class="mb-6">
+                        <label for="password" class=label_style>"Password"</label>
+                        <input type="password" node_ref=password class=input_style required />
+                    </div>
+                    <div>
+                        <button type="submit" class="bg-blue-500 text-white py-2 px-4 rounded-md w-full">"Login"</button>
+                    </div>
+                </form>
+                <div class="mt-4 text-center">
+                    <span class="text-gray-500">"Don't have an account? "</span>
+                    <a href="/signup" class="text-blue-500 font-medium">"Signup"</a>
+                </div>
+            </div>
+        </div>
 
-            <label for="password">"Password"</label>
-            <input name="password" type="password" node_ref=password />
-            <br />
-
-            <input type="submit" value="Login" />
-        </form>
-
-        {move || token().map(|token| match token {
-            Ok(token) => {
-                state.update(|s| s.set_token(token.access_token));
-                // FIXME: handle navigate error
-                _ = goto("/", NavigateOptions::default());
+        <ErrorBoundary
+            // ref: https://leptos-rs.github.io/leptos/view/07_errors.html?highlight=error%20handling#errorboundary
+            fallback=|cx, errors| view! { cx,
+                <div class="m-2 border border-red-700 bg-red-400">
+                    <p>"Login failed! Errors: "</p>
+                    // we can render a list of errors as strings, if we'd like
+                    <ul>
+                        {move || errors.get()
+                            .into_iter()
+                            .map(|(_, e)| view! { cx, <li>{e.to_string()}</li>})
+                            .collect_view(cx)
+                        }
+                    </ul>
+                </div>
             }
-            Err(_) => {}
-        })}
+        >
+            {move || token().map(|token| token.map(|token| {
+                state.update(|s| s.set_token(token.access_token));
+                goto("/", NavigateOptions::default())
+            }))}
+        </ErrorBoundary>
     }
 }
 
