@@ -83,7 +83,9 @@ pub async fn create_access_token(input: OAuth2PasswordRequest) -> Result<Token, 
         .await
         .unwrap();
     if resp.status() != reqwest::StatusCode::OK {
-        return Err((ServerFnError::ServerError(format!("login failed: {resp:?}"))));
+        return Err(ServerFnError::ServerError(format!(
+            "login failed: {resp:?}"
+        )));
     }
 
     let token = resp.json::<Token>().await.unwrap();
@@ -114,4 +116,26 @@ pub async fn signup(input: SignupInput) -> Result<(), ServerFnError> {
     }
 
     Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct User {
+    pub username: String,
+}
+
+#[server(GetMe, "/api")]
+pub async fn get_me(token: String) -> Result<User, ServerFnError> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("{BASE_URL}/me"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    if resp.status() != reqwest::StatusCode::OK {
+        return Err(ServerFnError::ServerError(format!("auth failed: {resp:?}")));
+    }
+    let user = resp.json::<User>().await.unwrap();
+
+    Ok(user)
 }

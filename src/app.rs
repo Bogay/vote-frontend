@@ -4,7 +4,7 @@ use leptos_meta::*;
 use leptos_router::*;
 
 use crate::api::{
-    get_topics, CreateAccessToken, CreateOptionInput, CreateTopic, CreateTopicInput,
+    get_me, get_topics, CreateAccessToken, CreateOptionInput, CreateTopic, CreateTopicInput,
     OAuth2PasswordRequest, Signup, SignupInput,
 };
 
@@ -21,13 +21,15 @@ pub fn App(cx: Scope) -> impl IntoView {
         // injects a stylesheet into the document <head>
         // id=leptos means cargo-leptos will hot-reload this stylesheet
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
-
         // sets the document title
         <Title text="NTNU CSIE Online Voting System" />
+        // Load tailwind css
+        <Script src="https://cdn.tailwindcss.com"></Script>
 
         // content for this welcome page
         <Router>
             <main>
+                <NavBar />
                 <Routes>
                     <Route path="" view=|cx| view! { cx, <HomePage/> }/>
                     <Route path="/topic/create" view=|cx| view! { cx, <CreateTopicPage/> }/>
@@ -39,6 +41,58 @@ pub fn App(cx: Scope) -> impl IntoView {
     }
 }
 
+#[component]
+fn NavBar(cx: Scope) -> impl IntoView {
+    let link_style = "text-gray-300 hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium";
+    let state = expect_context::<RwSignal<GlobalState>>(cx);
+    let user = create_resource(cx, state.read_only(), |state| async move {
+        match state.token() {
+            Some(token) => Some(get_me(token.to_string()).await),
+            None => None,
+        }
+    });
+    let username = move || user.read(cx).and_then(|u| u).map(|u| u.map(|u| u.username));
+
+    view! { cx,
+        <nav class="bg-gray-800">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center h-16">
+                    <div class="flex items-center">
+                        <a href="#" class="text-white font-semibold text-lg">"Voting System"</a>
+                    </div>
+                    <div class="hidden md:block">
+                        <div class="ml-4 flex items-center space-x-4">
+                            <a href="/topics" class=link_style>"Topics"</a>
+                            <a href="/about" class=link_style>"About"</a>
+                        </div>
+                    </div>
+                    <div class="flex flex-grow" />
+                    <div class="flex">
+                        <ErrorBoundary
+                            // FIXME: error handling
+                            fallback=move |cx, _errors| view! {cx, <a href="/login" class=link_style>"Login"</a> }>
+                            {move || match username() {
+                                Some(username) => {
+                                    view! { cx,
+                                        <div class="flex items-center">
+                                            <span class="text-gray-300 text-sm pr-2">{username}</span>
+                                        </div>
+                                    }.into_view(cx)
+                                }
+                                None => {
+                                    view! {cx, <a href="/login" class=link_style>"Login"</a> }
+                                        .into_view(cx)
+                                }
+                            }}
+
+                        </ErrorBoundary>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    }
+}
+
 /// Renders the home page. Which contains the topic list
 #[component]
 fn HomePage(cx: Scope) -> impl IntoView {
@@ -46,7 +100,6 @@ fn HomePage(cx: Scope) -> impl IntoView {
     let topics = move || topics.read(cx).map(|topics| topics.unwrap());
 
     view! { cx,
-        <h1>"Welcome to NTNU CSIE Online Voting System"</h1>
         <Transition
             fallback=move || view! { cx, <p>"Loading..."</p>}
         >
