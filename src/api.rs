@@ -34,7 +34,7 @@ pub async fn get_topics() -> Result<Vec<Topic>, ServerFnError> {
     Ok(resp)
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct CreateOptionInput {
     pub label: String,
     pub description: String,

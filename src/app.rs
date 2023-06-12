@@ -58,7 +58,7 @@ fn NavBar(cx: Scope) -> impl IntoView {
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex items-center h-16">
                     <div class="flex items-center">
-                        <a href="#" class="text-white font-semibold text-lg">"Voting System"</a>
+                        <a href="/" class="text-white font-semibold text-lg">"Voting System"</a>
                     </div>
                     <div class="hidden md:block">
                         <div class="ml-4 flex items-center space-x-4">
@@ -119,7 +119,6 @@ fn HomePage(cx: Scope) -> impl IntoView {
     }
 }
 
-// TODO: add option input
 #[component]
 fn CreateTopicPage(cx: Scope) -> impl IntoView {
     use leptos::html::Input;
@@ -128,48 +127,114 @@ fn CreateTopicPage(cx: Scope) -> impl IntoView {
     let starts_at: NodeRef<Input> = create_node_ref(cx);
     let ends_at: NodeRef<Input> = create_node_ref(cx);
 
-    let create_topic_action = create_server_action::<CreateTopic>(cx);
+    let init_options = vec![(0, create_signal(cx, CreateOptionInput::default()))];
+    let (options, set_options) = create_signal(cx, init_options);
+    let mut next_id = 1;
+    let add_option = move |_| {
+        set_options.update(move |options| {
+            options.push((next_id, create_signal(cx, CreateOptionInput::default())));
+        });
+        next_id += 1;
+    };
 
+    let create_topic = create_server_action::<CreateTopic>(cx);
+    // TODO: redirect after submit
     let on_submit = move |ev: SubmitEvent| {
         ev.prevent_default();
 
         let description = description().expect("<input> to exist").value();
         let starts_at = starts_at().expect("<input> to exist").value();
         let ends_at = ends_at().expect("<input> to exist").value();
+        let options = options().into_iter().map(|(_, (opt, _))| opt()).collect();
 
         let input = CreateTopicInput {
             description,
             starts_at,
             ends_at,
-            options: vec![CreateOptionInput {
-                label: "Option 0".to_string(),
-                description: "This is the first option.".to_string(),
-            }],
+            options,
         };
 
-        create_topic_action.dispatch(CreateTopic { input });
+        create_topic.dispatch(CreateTopic { input });
     };
 
+    let input_style = "w-full border-gray-300 rounded-md p-2";
+
     view! { cx,
-        <p>"Create Topic"</p>
-        <form on:submit=on_submit>
-            <label for="description">"Description"</label>
-            <input name="description" type="text" node_ref=description />
-            <br />
-
-            <label for="starts_at">"Starts at"</label>
-            <input name="starts_at" type="datetime-local" node_ref=starts_at />
-            <br />
-
-            <label for="ends_at">"Ends at"</label>
-            <input name="ends_at" type="datetime-local" node_ref=ends_at />
-            <br />
-
-            <ul>
-            </ul>
-
-            <input type="submit" value="Submit!" />
-        </form>
+        <div class="max-w-md mx-auto mt-8">
+        <div class="bg-white rounded-lg shadow-md p-8">
+            <h2 class="text-2xl font-semibold mb-6">"Create Topic"</h2>
+            <form on:submit=on_submit>
+                <div class="mb-4">
+                    <label for="description" class="block text-gray-700 text-sm font-medium mb-2">"Description"</label>
+                    <input type="text" id="description" name="description" node_ref=description class=input_style required />
+                </div>
+                <div class="mb-4">
+                    <label for="starts_at" class="block text-gray-700 text-sm font-medium mb-2">"Starts At"</label>
+                    <input type="datetime-local" id="starts_at" name="starts_at" node_ref=starts_at class=input_style required />
+                </div>
+                <div class="mb-4">
+                    <label for="ends_at" class="block text-gray-700 text-sm font-medium mb-2">"Ends At"</label>
+                    <input type="datetime-local" id="ends_at" name="ends_at" node_ref=ends_at class=input_style required />
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-2">"Options"</h3>
+                    <div id="options-container">
+                        <For
+                            each=options
+                            key=|option| option.0
+                            view=move |cx, (_, (option, set_option))| {
+                                let option = option();
+                                view! { cx,
+                                    <div class="mb-4">
+                                        <input
+                                            type="text"
+                                            name="option-label[]"
+                                            class=input_style
+                                            placeholder="Option Label"
+                                            prop:value=option.label
+                                            on:input=move |ev| {
+                                                set_option.update(|opt| {
+                                                    opt.label = event_target_value(&ev);
+                                                })
+                                            }
+                                            required
+                                        />
+                                        <textarea
+                                            name="option-description[]"
+                                            class=format!("{input_style} mt-2")
+                                            placeholder="Option Description"
+                                            on:input=move |ev| {
+                                                set_option.update(|opt| {
+                                                    opt.description = event_target_value(&ev);
+                                                })
+                                            }
+                                            prop:value=option.description
+                                        ></textarea>
+                                    </div>
+                                }
+                            }
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        id="add-option"
+                        class="bg-blue-500 text-white py-2 px-4 rounded-md"
+                        on:click=add_option
+                    >
+                        "Add Option"
+                    </button>
+                </div>
+                <div class="mt-6">
+                    <button
+                        type="submit"
+                        class="bg-green-500 text-white py-2 px-4 rounded-md w-full"
+                    >
+                        "Create"
+                    </button>
+                </div>
+            </form>
+        </div>
+        </div>
     }
 }
 
