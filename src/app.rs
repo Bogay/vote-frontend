@@ -25,6 +25,7 @@ pub fn App(cx: Scope) -> impl IntoView {
         <Title text="NTNU CSIE Online Voting System" />
         // Load tailwind css
         <Script src="https://cdn.tailwindcss.com"></Script>
+        <Link href="https://cdn.jsdelivr.net/npm/daisyui@3.1.0/dist/full.css" rel="stylesheet" />
 
         // content for this welcome page
         <Router>
@@ -99,32 +100,57 @@ fn HomePage(cx: Scope) -> impl IntoView {
     let topics = create_resource(cx, || (), |_| async move { get_topics().await });
     // FIXME: error handling
     let topics = move || topics.read(cx).map(|topics| topics.unwrap());
-    let topics = move || match topics() {
-        None => view! { cx, <p>"Loading..."</p> }.into_view(cx),
-        Some(data) => data
+    let topics = move || {
+        match topics() {
+            None => view! { cx, <p>"Loading..."</p> }.into_view(cx),
+            Some(data) => data
             .into_iter()
             .map(|topic| {
+                let goto = use_navigate(cx);
+                let open_topic = move |_| {
+                    // FIXME: error handling
+                    let _ = goto(&format!("/topic/{}", &topic.id), NavigateOptions::default());
+                };
                 view! { cx,
-                    <li class="mb-4">
-                        <div class="text-3xl font-semibold">{topic.description}</div>
-                        <div class="text-gray-600">"Starts at: "{topic.starts_at}</div>
-                        <div class="text-gray-600">"Ends at: "{topic.ends_at}</div>
-                        <div class="text-gray-600">"Created at: "{topic.created_at}</div>
-                        <div class="text-gray-600">"Updated at: "{topic.updated_at}</div>
-                        <div class="text-gray-600">"Stage: "{topic.stage}</div>
-                    </li>
+                    <div class="card w-96 bg-base-200 mb-4 shadow-xl">
+                        <div class="card-body">
+                            <div class="text-3xl font-semibold">{topic.description}</div>
+                            <p>
+                                "Starts at: "{topic.starts_at} <br />
+                                "Ends at: "{topic.ends_at} <br />
+                                "Updated at: "{topic.updated_at} <br />
+                                "Stage: "{topic.stage} <br />
+
+                                <div class="card-actions justify-end">
+                                  <button on:click=open_topic class="btn btn-primary">"Detail"</button>
+                                </div>
+                            </p>
+                        </div>
+                    </div>
                 }
                 .into_view(cx)
             })
             .collect_view(cx),
+        }
+    };
+
+    let create_topic = move |_| {
+        let goto = use_navigate(cx);
+        // FIXME: error handling
+        let _ = goto("/topic/create", NavigateOptions::default());
     };
 
     view! { cx,
-        <Transition
-            fallback=move || view! { cx, <p>"Loading..."</p>}
-        >
-            {topics}
-        </Transition>
+        <div class="p-4">
+            <button on:click=create_topic class="btn btn-primary my-4">"New Topic"</button>
+            <Transition
+                fallback=move || view! { cx, <p>"Loading..."</p>}
+            >
+                <div class="flex flex-col items-center w-full mx-auto">
+                    {topics}
+                </div>
+            </Transition>
+        </div>
     }
 }
 
@@ -355,7 +381,7 @@ fn SignupPage(cx: Scope) -> impl IntoView {
                 <h2 class="text-2xl font-semibold mb-6">"Signup"</h2>
                 <form on:submit=on_submit>
                     <div class="mb-4">
-                        <label for="username" class=label_style>"Username / Email"</label>
+                        <label for="username" class=label_style>"Username"</label>
                         <input type="username" node_ref=username class=input_style required />
                     </div>
                     <div class="mb-6">
