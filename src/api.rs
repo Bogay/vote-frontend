@@ -34,6 +34,18 @@ pub async fn get_topics() -> Result<Vec<Topic>, ServerFnError> {
     Ok(resp)
 }
 
+#[server(GetOneTopic, "/api")]
+pub async fn get_one_topic(id: String) -> Result<Topic, ServerFnError> {
+    let resp = reqwest::get(format!("{BASE_URL}/topic/{id}"))
+        .await
+        .unwrap()
+        .json::<Topic>()
+        .await
+        .unwrap();
+
+    Ok(resp)
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct CreateOptionInput {
     pub label: String,

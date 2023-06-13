@@ -4,8 +4,8 @@ use leptos_meta::*;
 use leptos_router::*;
 
 use crate::api::{
-    get_me, get_topics, CreateAccessToken, CreateOptionInput, CreateTopic, CreateTopicInput,
-    OAuth2PasswordRequest, Signup, SignupInput,
+    get_me, get_one_topic, get_topics, CreateAccessToken, CreateOptionInput, CreateTopic,
+    CreateTopicInput, OAuth2PasswordRequest, Signup, SignupInput, Topic,
 };
 
 use crate::state::GlobalState;
@@ -34,6 +34,7 @@ pub fn App(cx: Scope) -> impl IntoView {
                 <Routes>
                     <Route path="" view=|cx| view! { cx, <HomePage/> }/>
                     <Route path="/topic/create" view=|cx| view! { cx, <CreateTopicPage/> }/>
+                    <Route path="/topic/:id" view=|cx| view! { cx, <TopicPage/> }/>
                     <Route path="/login" view=|cx| view! { cx, <LoginPage/> }/>
                     <Route path="/signup" view=|cx| view! { cx, <SignupPage/> }/>
                 </Routes>
@@ -100,38 +101,18 @@ fn HomePage(cx: Scope) -> impl IntoView {
     let topics = create_resource(cx, || (), |_| async move { get_topics().await });
     // FIXME: error handling
     let topics = move || topics.read(cx).map(|topics| topics.unwrap());
-    let topics = move || {
-        match topics() {
-            None => view! { cx, <p>"Loading..."</p> }.into_view(cx),
-            Some(data) => data
+    let topics = move || match topics() {
+        None => view! { cx, <p>"Loading..."</p> }.into_view(cx),
+        Some(data) => data
             .into_iter()
             .map(|topic| {
-                let goto = use_navigate(cx);
-                let open_topic = move |_| {
-                    // FIXME: error handling
-                    let _ = goto(&format!("/topic/{}", &topic.id), NavigateOptions::default());
-                };
+                let (topic, _) = create_signal(cx, topic);
                 view! { cx,
-                    <div class="card w-96 bg-base-200 mb-4 shadow-xl">
-                        <div class="card-body">
-                            <div class="text-3xl font-semibold">{topic.description}</div>
-                            <p>
-                                "Starts at: "{topic.starts_at} <br />
-                                "Ends at: "{topic.ends_at} <br />
-                                "Updated at: "{topic.updated_at} <br />
-                                "Stage: "{topic.stage} <br />
-
-                                <div class="card-actions justify-end">
-                                  <button on:click=open_topic class="btn btn-primary">"Detail"</button>
-                                </div>
-                            </p>
-                        </div>
-                    </div>
+                    <TopicCard topic=topic show_action=true />
                 }
                 .into_view(cx)
             })
             .collect_view(cx),
-        }
     };
 
     let create_topic = move |_| {
@@ -150,6 +131,85 @@ fn HomePage(cx: Scope) -> impl IntoView {
                     {topics}
                 </div>
             </Transition>
+        </div>
+    }
+}
+
+#[component]
+fn TopicPage(cx: Scope) -> impl IntoView {
+    let params = use_params_map(cx);
+    let id = params.with(|params| params.get("id").unwrap().to_string());
+    let topic = {
+        let id = id.clone();
+        create_resource(
+            cx,
+            || (),
+            move |_| {
+                let id = id.clone();
+                async move { get_one_topic(id).await }
+            },
+        )
+    };
+
+    view! { cx,
+        <div class="p-4 md:p-16 flex flex-col w-full item-center mx-auto">
+            <ErrorBoundary
+                fallback=move |cx, errors| view! { cx, <div>"Error"</div>}
+            >
+                <Transition
+                    fallback=move || view! { cx, <p>"Loading..."</p>}
+                >
+                    {move || topic.read(cx).map(|topic| {
+                        view! { cx,
+                            {topic.map(|topic| {
+                                let (topic, _) = create_signal(cx, topic);
+                                // topic card
+                                view! { cx,
+                                    <TopicCard topic=topic show_action=false />
+                                }
+                                // options & votes
+
+                                // comments
+                            })}
+                        }
+                    })}
+                </Transition>
+            </ErrorBoundary>
+        </div>
+    }
+}
+
+#[component]
+fn TopicCard(
+    cx: Scope,
+    #[prop(into)] topic: Signal<Topic>,
+    #[prop(optional)] show_action: bool,
+) -> impl IntoView {
+    let topic = topic();
+    let goto = use_navigate(cx);
+    let open_topic = move |_| {
+        // FIXME: error handling
+        let _ = goto(&format!("/topic/{}", &topic.id), NavigateOptions::default());
+    };
+    let action = show_action.then(|| {
+        view! { cx,
+            <div class="card-actions justify-end">
+            <button on:click=open_topic class="btn btn-primary">"Detail"</button>
+            </div>
+        }
+    });
+    view! { cx,
+        <div class="card w-96 bg-base-200 mb-4 shadow-xl">
+            <div class="card-body">
+                <div class="text-3xl font-semibold">{topic.description}</div>
+                <p>
+                    "Starts at: "{topic.starts_at} <br />
+                    "Ends at: "{topic.ends_at} <br />
+                    "Updated at: "{topic.updated_at} <br />
+                    "Stage: "{topic.stage} <br />
+                    {action}
+                </p>
+            </div>
         </div>
     }
 }

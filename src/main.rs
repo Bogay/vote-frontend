@@ -5,7 +5,8 @@ async fn main() -> std::io::Result<()> {
     use actix_web::*;
     use leptos::*;
     use leptos_actix::{generate_route_list, LeptosRoutes};
-    use vote::api::{CreateAccessToken, CreateTopic, GetMe, GetTopics, Signup};
+    use vote::api::{CreateAccessToken, CreateTopic, GetMe, GetOneTopic, GetTopics, Signup};
+
     use vote::app::*;
 
     let conf = get_configuration(None).await.unwrap();
@@ -14,6 +15,7 @@ async fn main() -> std::io::Result<()> {
     let routes = generate_route_list(|cx| view! { cx, <App/> });
 
     _ = CreateTopic::register();
+    _ = GetOneTopic::register();
     _ = GetTopics::register();
     _ = CreateAccessToken::register();
     _ = Signup::register();
