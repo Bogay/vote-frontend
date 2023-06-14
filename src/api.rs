@@ -1,15 +1,17 @@
 use leptos::{ServerFnError, *};
 use serde::{Deserialize, Serialize};
-use std::cell::OnceCell;
+use std::sync::OnceLock;
 
 // base url is not used in client code
 
 #[allow(unused)]
-const BASE_URL: OnceCell<&'static str> = OnceCell::new();
+static BASE_URL: OnceLock<String> = OnceLock::new();
 
 #[allow(unused)]
 fn base_url() -> &'static str {
-    BASE_URL.get_or_init(|| option_env!("VOTE_BACKEND_URL").unwrap_or("http://localhost:8000"))
+    BASE_URL.get_or_init(|| {
+        std::env::var("VOTE_BACKEND_URL").unwrap_or("http://localhost:8000".to_string())
+    })
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
