@@ -2,8 +2,12 @@ use leptos::{ServerFnError, *};
 use serde::{Deserialize, Serialize};
 use std::cell::OnceCell;
 
+// base url is not used in client code
+
+#[allow(unused)]
 const BASE_URL: OnceCell<&'static str> = OnceCell::new();
 
+#[allow(unused)]
 fn base_url() -> &'static str {
     BASE_URL.get_or_init(|| option_env!("VOTE_BACKEND_URL").unwrap_or("http://localhost:8000"))
 }
