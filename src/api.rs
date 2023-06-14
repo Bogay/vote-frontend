@@ -1,5 +1,12 @@
 use leptos::{ServerFnError, *};
 use serde::{Deserialize, Serialize};
+use std::cell::OnceCell;
+
+const BASE_URL: OnceCell<&'static str> = OnceCell::new();
+
+fn base_url() -> &'static str {
+    BASE_URL.get_or_init(|| option_env!("VOTE_BACKEND_URL").unwrap_or("http://localhost:8000"))
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct VoteOption {
@@ -20,11 +27,9 @@ pub struct Topic {
     pub stage: String,
 }
 
-const BASE_URL: &'static str = "http://localhost:8000";
-
 #[server(GetTopics, "/api")]
 pub async fn get_topics() -> Result<Vec<Topic>, ServerFnError> {
-    let resp = reqwest::get(format!("{}/topic", BASE_URL))
+    let resp = reqwest::get(format!("{}/topic", base_url()))
         .await
         .unwrap()
         .json::<Vec<Topic>>()
@@ -36,7 +41,7 @@ pub async fn get_topics() -> Result<Vec<Topic>, ServerFnError> {
 
 #[server(GetOneTopic, "/api")]
 pub async fn get_one_topic(id: String) -> Result<Topic, ServerFnError> {
-    let resp = reqwest::get(format!("{BASE_URL}/topic/{id}"))
+    let resp = reqwest::get(format!("{}/topic/{id}", base_url()))
         .await
         .unwrap()
         .json::<Topic>()
@@ -64,7 +69,7 @@ pub struct CreateTopicInput {
 pub async fn create_topic(input: CreateTopicInput) -> Result<(), ServerFnError> {
     let client = reqwest::Client::new();
     let resp = client
-        .post(format!("{BASE_URL}/topic"))
+        .post(format!("{}/topic", base_url()))
         .json(&input)
         .send()
         .await
@@ -89,7 +94,7 @@ pub struct Token {
 pub async fn create_access_token(input: OAuth2PasswordRequest) -> Result<Token, ServerFnError> {
     let client = reqwest::Client::new();
     let resp = client
-        .post(format!("{BASE_URL}/auth/token"))
+        .post(format!("{}/auth/token", base_url()))
         .form(&input)
         .send()
         .await
@@ -115,7 +120,7 @@ pub struct SignupInput {
 pub async fn signup(input: SignupInput) -> Result<(), ServerFnError> {
     let client = reqwest::Client::new();
     let resp = client
-        .post(format!("{BASE_URL}/user/signup"))
+        .post(format!("{}/user/signup", base_url()))
         .json(&input)
         .send()
         .await
@@ -139,7 +144,7 @@ pub struct User {
 pub async fn get_me(token: String) -> Result<User, ServerFnError> {
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("{BASE_URL}/me"))
+        .get(format!("{}/me", base_url()))
         .bearer_auth(token)
         .send()
         .await
