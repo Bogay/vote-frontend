@@ -5,7 +5,7 @@ use leptos_router::*;
 
 use crate::api::{
     get_me, get_one_topic, get_topics, CreateAccessToken, CreateOptionInput, CreateTopic,
-    CreateTopicInput, OAuth2PasswordRequest, Signup, SignupInput, Topic,
+    CreateTopicInput, OAuth2PasswordRequest, Signup, SignupInput, Topic, VoteOption,
 };
 
 use crate::state::GlobalState;
@@ -164,12 +164,24 @@ fn TopicPage(cx: Scope) -> impl IntoView {
                             {topic.map(|topic| {
                                 let (topic, _) = create_signal(cx, topic);
                                 // topic card
-                                view! { cx,
-                                    <TopicCard topic=topic show_action=false />
-                                }
+                                let topic_card = {
+                                    view! { cx,
+                                        <TopicCard topic=topic show_action=false />
+                                    }.into_view(cx)
+                                };
                                 // options & votes
-
+                                let option_cards = topic().options.iter().map(|opt| {
+                                    let (opt, _) = create_signal(cx, opt.clone());
+                                    view! { cx,
+                                        <OptionCard option=opt/>
+                                    }
+                                }).collect_view(cx);
                                 // comments
+
+                                view! { cx,
+                                    {topic_card}
+                                    {option_cards}
+                                }
                             })}
                         }
                     })}
@@ -209,6 +221,20 @@ fn TopicCard(
                     "Stage: "{topic.stage} <br />
                     {action}
                 </p>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn OptionCard(cx: Scope, #[prop(into)] option: Signal<VoteOption>) -> impl IntoView {
+    let option = option();
+
+    view! { cx,
+        <div class="card w-36 bg-base-100 mb-4">
+            <div class="card-body">
+                <div class="text-lg">{option.label}</div>
+                <p>{option.description}</p>
             </div>
         </div>
     }
