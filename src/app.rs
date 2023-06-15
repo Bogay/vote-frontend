@@ -1,11 +1,12 @@
-use leptos::ev::SubmitEvent;
+use leptos::ev::{MouseEvent, SubmitEvent};
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
 
 use crate::api::{
-    get_me, get_one_topic, get_topics, CreateAccessToken, CreateOptionInput, CreateTopic,
-    CreateTopicInput, OAuth2PasswordRequest, Signup, SignupInput, Topic, VoteOption,
+    create_vote, get_me, get_one_topic, get_topics, CreateAccessToken, CreateOptionInput,
+    CreateTopic, CreateTopicInput, CreateVoteInput, OAuth2PasswordRequest, Signup, SignupInput,
+    Topic, VoteOption,
 };
 
 use crate::state::GlobalState;
@@ -172,8 +173,22 @@ fn TopicPage(cx: Scope) -> impl IntoView {
                                 // options & votes
                                 let option_cards = topic().options.iter().map(|opt| {
                                     let (opt, _) = create_signal(cx, opt.clone());
+                                    let topic = topic();
+                                    let vote = move |_| {
+                                        let topic_id = topic.id.clone();
+                                        spawn_local(async move {
+                                            let input = CreateVoteInput {
+                                                topic_id: topic_id.clone(),
+                                                option_id: opt().id,
+                                            };
+                                            let goto = use_navigate(cx);
+                                            // FIXME: error handling
+                                            let _ = create_vote(input).await;
+                                            let _ = goto(&format!("/topic/{}", topic_id.clone()), NavigateOptions::default(),);
+                                        });
+                                    };
                                     view! { cx,
-                                        <OptionCard option=opt/>
+                                        <OptionCard option=opt action=Some(vote) />
                                     }
                                 }).collect_view(cx);
                                 // comments
@@ -227,15 +242,34 @@ fn TopicCard(
 }
 
 #[component]
-fn OptionCard(cx: Scope, #[prop(into)] option: Signal<VoteOption>) -> impl IntoView {
+fn OptionCard<F>(
+    cx: Scope,
+    #[prop(into)] option: Signal<VoteOption>,
+    #[prop(default = None)] action: Option<F>,
+) -> impl IntoView
+where
+    F: FnMut(MouseEvent) -> () + 'static,
+{
     let option = option();
 
     view! { cx,
-        <div class="card w-36 bg-base-100 mb-4">
+        <div class="card card-compact w-96 bg-base-100 m-4">
+            <div class="card-title">
+                {option.label}
+            </div>
             <div class="card-body">
-                <div class="text-lg">{option.label}</div>
                 <p>{option.description}</p>
             </div>
+            {action.map(|action| {
+                view! { cx,
+                    <div class="card-actions justify-end">
+                        <button
+                            class="btn btn-sm btn-square btn-accent"
+                            on:click=action
+                        >"+"</button>
+                    </div>
+                }
+            })}
         </div>
     }
 }

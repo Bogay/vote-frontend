@@ -5,7 +5,9 @@ async fn main() -> std::io::Result<()> {
     use actix_web::*;
     use leptos::*;
     use leptos_actix::{generate_route_list, LeptosRoutes};
-    use vote::api::{CreateAccessToken, CreateTopic, GetMe, GetOneTopic, GetTopics, Signup};
+    use vote::api::{
+        CreateAccessToken, CreateTopic, CreateVote, GetMe, GetOneTopic, GetTopics, Signup,
+    };
 
     use vote::app::*;
 
@@ -20,6 +22,7 @@ async fn main() -> std::io::Result<()> {
     _ = CreateAccessToken::register();
     _ = Signup::register();
     _ = GetMe::register();
+    _ = CreateVote::register();
 
     HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;

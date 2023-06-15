@@ -85,6 +85,25 @@ pub async fn create_topic(input: CreateTopicInput) -> Result<(), ServerFnError> 
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CreateVoteInput {
+    pub topic_id: String,
+    pub option_id: String,
+}
+
+#[server(CreateVote, "/api")]
+pub async fn create_vote(input: CreateVoteInput) -> Result<(), ServerFnError> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{}/vote", base_url()))
+        .json(&input)
+        .send()
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OAuth2PasswordRequest {
     pub username: String,
     pub password: String,
