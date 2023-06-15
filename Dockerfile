@@ -1,11 +1,11 @@
 FROM rust:slim AS base
 
 RUN apt update -y && apt install -y pkg-config libssl-dev
+RUN cargo install --locked cargo-leptos
 
 FROM base AS builder
 
 WORKDIR /vote-frontend
-RUN cargo install --locked cargo-leptos
 COPY . .
 RUN cargo leptos build --release
 
@@ -15,4 +15,5 @@ FROM base
 COPY --from=builder /vote-frontend/target/site /vote-frontend/target/server/release/vote /srv/vote/
 WORKDIR /srv/vote
 
-CMD ["/srv/vote/vote"]
+# CMD ["/srv/vote/vote"]
+CMD ["cargo", "leptos", "serve", "--release"]
