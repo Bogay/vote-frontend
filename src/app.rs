@@ -411,11 +411,16 @@ fn LoginPage(cx: Scope) -> impl IntoView {
     let password: NodeRef<Input> = create_node_ref(cx);
     let goto = use_navigate(cx);
     let create_access_token = create_server_action::<CreateAccessToken>(cx);
+    let login_pending = create_access_token.pending();
     let token = create_access_token.value();
     let state = expect_context::<RwSignal<GlobalState>>(cx);
 
     let on_submit = move |ev: SubmitEvent| {
         ev.prevent_default();
+
+        if login_pending() {
+            return;
+        }
 
         let username = username().expect("<input> to exist").value();
         let password = password().expect("<input> to exist").value();
@@ -445,7 +450,11 @@ fn LoginPage(cx: Scope) -> impl IntoView {
                     </div>
                     <div>
                         <button type="submit" class="btn btn-primary py-2 px-4 w-full">
-                            "Login"
+                            {move || if login_pending() {
+                                view! { cx, <span class="loading loading-spinner"></span> }.into_view(cx)
+                            } else {
+                                view! { cx, "Login" }.into_view(cx)
+                            }}
                         </button>
                     </div>
                 </form>
@@ -456,30 +465,13 @@ fn LoginPage(cx: Scope) -> impl IntoView {
             </div>
         </div>
 
-        <ErrorBoundary
-            // ref: https://leptos-rs.github.io/leptos/view/07_errors.html?highlight=error%20handling#errorboundary
-            fallback=|cx, errors| view! { cx,
-                <div class="alert alert-error p-4">
-                    <div>
-                        <h3>"Login failed!"</h3>
-                        // we can render a list of errors as strings, if we'd like
-                        <ul>
-                            {move || errors.get()
-                                .into_iter()
-                                .map(|(_, e)| view! { cx, <li>{e.to_string()}</li>})
-                                .collect_view(cx)
-                            }
-                        </ul>
-                    </div>
-                </div>
-            }
-        >
+        <ErrorList error_title="Login failed!".to_string()>
             {move || token().map(|token| token.map(|token| {
                 state.update(|s| s.set_token(token.access_token));
                 // FIXME: error handling
                 goto("/", NavigateOptions::default())
             }))}
-        </ErrorBoundary>
+        </ErrorList>
     }
 }
 
@@ -559,22 +551,7 @@ fn SignupPage(cx: Scope) -> impl IntoView {
             </div>
         </div>
 
-        <ErrorBoundary
-            // ref: https://leptos-rs.github.io/leptos/view/07_errors.html?highlight=error%20handling#errorboundary
-            fallback=|cx, errors| view! { cx,
-                <div class="m-2 border border-red-700 bg-red-400">
-                    <p>"Login failed! Errors: "</p>
-                    // we can render a list of errors as strings, if we'd like
-                    <ul>
-                        {move || errors.get()
-                            .into_iter()
-                            .map(|(_, e)| view! { cx, <li>{e.to_string()}</li>})
-                            .collect_view(cx)
-                        }
-                    </ul>
-                </div>
-            }
-        >
+        <ErrorList error_title="Signup failed!".to_string()>
             {move || {
                 signup_result().map(|r| r.map(|_| {
                     let goto = use_navigate(cx);
@@ -582,6 +559,38 @@ fn SignupPage(cx: Scope) -> impl IntoView {
                     goto("/login", NavigateOptions::default()).unwrap()
                 }))
             }}
+        </ErrorList>
+    }
+}
+
+#[component]
+fn ErrorList(
+    cx: Scope,
+    children: Children,
+    #[prop(default = "Error Occurred!".to_string())] error_title: String,
+) -> impl IntoView {
+    let (error_title, _) = create_signal(cx, error_title);
+
+    view! { cx,
+        <ErrorBoundary
+            // ref: https://leptos-rs.github.io/leptos/view/07_errors.html?highlight=error%20handling#errorboundary
+            fallback=move |cx, errors| view! { cx,
+                <div class="alert alert-error p-4">
+                    <div>
+                        <h3>{error_title()}</h3>
+                        // we can render a list of errors as strings, if we'd like
+                        <ul>
+                            {move || errors.get()
+                                .into_iter()
+                                .map(|(_, e)| view! { cx, <li>{e.to_string()}</li>})
+                                .collect_view(cx)
+                            }
+                        </ul>
+                    </div>
+                </div>
+            }
+        >
+            {children(cx)}
         </ErrorBoundary>
     }
 }
