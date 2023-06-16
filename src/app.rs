@@ -103,35 +103,37 @@ fn NavBar(cx: Scope) -> impl IntoView {
 /// Renders the home page. Which contains the topic list
 #[component]
 fn HomePage(cx: Scope) -> impl IntoView {
-    let topics = create_resource(cx, || (), |_| async move { get_topics().await });
-    // FIXME: error handling
-    let topics = move || topics.read(cx).map(|topics| topics.unwrap());
-    let topics = move || match topics() {
-        None => view! { cx, <p>"Loading..."</p> }.into_view(cx),
-        Some(data) => data
-            .into_iter()
-            .map(|topic| {
-                let (topic, _) = create_signal(cx, topic);
-                view! { cx,
-                    <TopicCard topic=topic show_action=true />
-                }
-                .into_view(cx)
-            })
-            .collect_view(cx),
-    };
-
-    let create_topic = move |_| {
-        let goto = use_navigate(cx);
+    let loading =
+        move || view! { cx, <p>"Loading..." <span class="loading loading-spinner"></span></p> };
+    let topics = create_local_resource(cx, || (), |_| async move { get_topics().await });
+    let topics = move || {
         // FIXME: error handling
-        let _ = goto("/topic/create", NavigateOptions::default());
+        match topics.read(cx).map(|topics| topics.unwrap()) {
+            None => loading().into_view(cx),
+            Some(data) => data
+                .into_iter()
+                .map(|topic| {
+                    let (topic, _) = create_signal(cx, topic);
+                    view! { cx,
+                        <TopicCard topic=topic show_action=true />
+                    }
+                    .into_view(cx)
+                })
+                .collect_view(cx),
+        }
     };
 
     view! { cx,
         <div class="p-4">
-            <button on:click=create_topic class="btn btn-primary my-4">"New Topic"</button>
-            <Transition
-                fallback=move || view! { cx, <p>"Loading..."</p>}
-            >
+            <button
+                on:click=move |_| {
+                    let goto = use_navigate(cx);
+                    // FIXME: error handling
+                    let _ = goto("/topic/create", NavigateOptions::default());
+                }
+                class="btn btn-primary my-4"
+            >"New Topic"</button>
+            <Transition fallback=loading>
                 <div class="flex flex-col items-center w-full mx-auto">
                     {topics}
                 </div>
@@ -286,7 +288,8 @@ fn CreateTopicPage(cx: Scope) -> impl IntoView {
     let starts_at: NodeRef<Input> = create_node_ref(cx);
     let ends_at: NodeRef<Input> = create_node_ref(cx);
 
-    let init_options = vec![(0, create_signal(cx, CreateOptionInput::default()))];
+    // let init_options = vec![(0, create_signal(cx, CreateOptionInput::default()))];
+    let init_options = vec![];
     let (options, set_options) = create_signal(cx, init_options);
     let mut next_id = 1;
     let add_option = move |_| {
@@ -297,7 +300,7 @@ fn CreateTopicPage(cx: Scope) -> impl IntoView {
     };
 
     let create_topic = create_server_action::<CreateTopic>(cx);
-    // TODO: redirect after submit
+    let create_topic_result = create_topic.value();
     let on_submit = move |ev: SubmitEvent| {
         ev.prevent_default();
 
@@ -320,86 +323,96 @@ fn CreateTopicPage(cx: Scope) -> impl IntoView {
 
     view! { cx,
         <div class="max-w-md mx-auto mt-8">
-        <div class="rounded-lg shadow-md p-8">
-            <h2 class="text-2xl font-semibold mb-6">"Create Topic"</h2>
-            <form on:submit=on_submit>
-                <div class="mb-4">
-                    <label for="description" class="">
-                        <span class="label-text">"Description"</span>
-                    </label>
-                    <input type="text" id="description" name="description" node_ref=description class=input_style required />
-                </div>
-                <div class="mb-4">
-                    <label for="starts_at" class="">
-                        <span class="label-text">"Starts At"</span>
-                    </label>
-                    <input type="datetime-local" id="starts_at" name="starts_at" node_ref=starts_at class=input_style required />
-                </div>
-                <div class="mb-4">
-                    <label for="ends_at" class="">
-                        <span class="label-text">"Ends At"</span>
-                    </label>
-                    <input type="datetime-local" id="ends_at" name="ends_at" node_ref=ends_at class=input_style required />
-                </div>
-                <div>
-                    <h3 class="text-lg font-semibold mb-2">"Options"</h3>
-                    <div id="options-container">
-                        <For
-                            each=options
-                            key=|option| option.0
-                            view=move |cx, (_, (option, set_option))| {
-                                let option = option();
-                                view! { cx,
-                                    <div class="mb-4">
-                                        <input
-                                            type="text"
-                                            name="option-label[]"
-                                            class=input_style
-                                            placeholder="Option Label"
-                                            prop:value=option.label
-                                            on:input=move |ev| {
-                                                set_option.update(|opt| {
-                                                    opt.label = event_target_value(&ev);
-                                                })
-                                            }
-                                            required
-                                        />
-                                        <textarea
-                                            name="option-description[]"
-                                            class="textarea textarea-info mt-2 w-full max-w-md"
-                                            placeholder="Option Description"
-                                            on:input=move |ev| {
-                                                set_option.update(|opt| {
-                                                    opt.description = event_target_value(&ev);
-                                                })
-                                            }
-                                            prop:value=option.description
-                                        ></textarea>
-                                    </div>
-                                }
-                            }
-                        />
+            <div class="rounded-lg shadow-md p-8">
+                <h2 class="text-2xl font-semibold mb-6">"Create Topic"</h2>
+                <form on:submit=on_submit>
+                    <div class="mb-4">
+                        <label for="description" class="">
+                            <span class="label-text">"Description"</span>
+                        </label>
+                        <input type="text" id="description" name="description" node_ref=description class=input_style required />
                     </div>
-                    <button
-                        type="button"
-                        id="add-option"
-                        class="btn btn-info py-2 px-4"
-                        on:click=add_option
-                    >
-                        "Add Option"
-                    </button>
-                </div>
-                <div class="mt-6">
-                    <button
-                        type="submit"
-                        class="btn btn-success py-2 px-4 w-full"
-                    >
-                        "Create"
-                    </button>
-                </div>
-            </form>
+                    <div class="mb-4">
+                        <label for="starts_at" class="">
+                            <span class="label-text">"Starts At"</span>
+                        </label>
+                        <input type="datetime-local" id="starts_at" name="starts_at" node_ref=starts_at class=input_style required />
+                    </div>
+                    <div class="mb-4">
+                        <label for="ends_at" class="">
+                            <span class="label-text">"Ends At"</span>
+                        </label>
+                        <input type="datetime-local" id="ends_at" name="ends_at" node_ref=ends_at class=input_style required />
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold mb-2">"Options"</h3>
+                        <div id="options-container">
+                            <For
+                                each=options
+                                key=|option| option.0
+                                view=move |cx, (_, (option, set_option))| {
+                                    // seems to be a bug, this value is actually used
+                                    #[allow(unused)]
+                                    let option = option();
+                                    view! { cx,
+                                        <div class="mb-4">
+                                            <input
+                                                type="text"
+                                                name="option-label[]"
+                                                class=input_style
+                                                placeholder="Option Label"
+                                                prop:value=option.label
+                                                on:input=move |ev| {
+                                                    set_option.update(|opt| {
+                                                        opt.label = event_target_value(&ev);
+                                                    })
+                                                }
+                                                required
+                                            />
+                                            <textarea
+                                                name="option-description[]"
+                                                class="textarea textarea-info mt-2 w-full max-w-md"
+                                                placeholder="Option Description"
+                                                on:input=move |ev| {
+                                                    set_option.update(|opt| {
+                                                        opt.description = event_target_value(&ev);
+                                                    })
+                                                }
+                                                prop:value=option.description
+                                            ></textarea>
+                                        </div>
+                                    }
+                                }
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            id="add-option"
+                            class="btn btn-info py-2 px-4"
+                            on:click=add_option
+                        >
+                            "Add Option"
+                        </button>
+                    </div>
+                    <div class="mt-6">
+                        <button
+                            type="submit"
+                            class="btn btn-success py-2 px-4 w-full"
+                        >
+                            "Create"
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
-        </div>
+
+        <ErrorList error_title="Create Topic Failed".to_string()>
+            {move || create_topic_result().map(|resp| resp.map(|_| {
+                let goto = use_navigate(cx);
+                // FIXME: error handling
+                goto("/", NavigateOptions::default())
+            }))}
+        </ErrorList>
     }
 }
 
