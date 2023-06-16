@@ -71,24 +71,26 @@ fn NavBar(cx: Scope) -> impl IntoView {
                     </div>
                     <div class="flex flex-grow" />
                     <div class="flex">
-                        <ErrorBoundary
-                            // FIXME: error handling
-                            fallback=move |cx, _errors| view! {cx, <a href="/login" class=link_style>"Login"</a> }>
-                            {move || match username() {
-                                Some(username) => {
-                                    view! { cx,
-                                        <div class="flex items-center">
-                                            <span class="text-gray-300 text-sm pr-2">{username}</span>
-                                        </div>
-                                    }.into_view(cx)
-                                }
-                                None => {
-                                    view! {cx, <a href="/login" class=link_style>"Login"</a> }
-                                        .into_view(cx)
-                                }
-                            }}
+                        <Transition fallback=move || view! { cx, <p>"Loading..."</p> }>
+                            <ErrorBoundary
+                                // FIXME: error handling
+                                fallback=move |cx, _errors| view! {cx, <a href="/login" class=link_style>"Login"</a> }>
+                                {move || match username() {
+                                    Some(username) => {
+                                        view! { cx,
+                                            <div class="flex items-center">
+                                                <span class="text-gray-300 text-sm pr-2">{username}</span>
+                                            </div>
+                                        }.into_view(cx)
+                                    }
+                                    None => {
+                                        view! {cx, <a href="/login" class=link_style>"Login"</a> }
+                                            .into_view(cx)
+                                    }
+                                }}
 
-                        </ErrorBoundary>
+                            </ErrorBoundary>
+                        </Transition>
                     </div>
                 </div>
             </div>
@@ -459,6 +461,7 @@ fn LoginPage(cx: Scope) -> impl IntoView {
         >
             {move || token().map(|token| token.map(|token| {
                 state.update(|s| s.set_token(token.access_token));
+                // FIXME: error handling
                 goto("/", NavigateOptions::default())
             }))}
         </ErrorBoundary>
@@ -472,12 +475,16 @@ fn SignupPage(cx: Scope) -> impl IntoView {
     let username: NodeRef<Input> = create_node_ref(cx);
     let password: NodeRef<Input> = create_node_ref(cx);
     let email: NodeRef<Input> = create_node_ref(cx);
-    let goto = use_navigate(cx);
     let signup = create_server_action::<Signup>(cx);
     let signup_result = signup.value();
+    let signup_pending = signup.pending();
 
     let on_submit = move |ev: SubmitEvent| {
         ev.prevent_default();
+
+        if signup_pending() {
+            return;
+        }
 
         let username = username().expect("<input> to exist").value();
         let password = password().expect("<input> to exist").value();
@@ -513,12 +520,20 @@ fn SignupPage(cx: Scope) -> impl IntoView {
                         <input type="password" node_ref=password class=input_style required />
                     </div>
                     <div>
-                        <button type="submit" class="bg-blue-500 text-white py-2 px-4 rounded-md w-full">"Signup"</button>
+                        <button type="submit" class="bg-blue-500 text-white py-2 px-4 rounded-md w-full">
+                            {move || if signup_pending() {
+                                "Loading..."
+                            } else {
+                                "Signup"
+                            }}
+                        </button>
                     </div>
                 </form>
                 <div class="mt-4 text-center">
                     <span class="text-gray-500">"Already have an account? "</span>
-                    <a href="/login" class="text-blue-500 font-medium">"Login"</a>
+                    <a href="/login" class="text-blue-500 font-medium">
+                        "Login"
+                    </a>
                 </div>
             </div>
         </div>
@@ -539,10 +554,13 @@ fn SignupPage(cx: Scope) -> impl IntoView {
                 </div>
             }
         >
-            {move || signup_result().map(|r| if r.is_ok() {
-                // FIXME: error handling
-                let _ = goto("/login", NavigateOptions::default());
-            })}
+            {move || {
+                signup_result().map(|r| r.map(|_| {
+                    let goto = use_navigate(cx);
+                    // FIXME: error handling
+                    goto("/login", NavigateOptions::default()).unwrap()
+                }))
+            }}
         </ErrorBoundary>
     }
 }
