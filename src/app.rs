@@ -25,8 +25,8 @@ pub fn App(cx: Scope) -> impl IntoView {
         // sets the document title
         <Title text="NTNU CSIE Online Voting System" />
         // Load tailwind css
+        <link href="https://cdn.jsdelivr.net/npm/daisyui@3.1.1/dist/full.css" rel="stylesheet" type="text/css" />
         <Script src="https://cdn.tailwindcss.com"></Script>
-        <Link href="https://cdn.jsdelivr.net/npm/daisyui@3.1.0/dist/full.css" rel="stylesheet" />
 
         // content for this welcome page
         <Router>
@@ -46,7 +46,6 @@ pub fn App(cx: Scope) -> impl IntoView {
 
 #[component]
 fn NavBar(cx: Scope) -> impl IntoView {
-    let link_style = "text-gray-300 hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium";
     let state = expect_context::<RwSignal<GlobalState>>(cx);
     let user = create_resource(cx, state.read_only(), |state| async move {
         match state.token() {
@@ -55,44 +54,47 @@ fn NavBar(cx: Scope) -> impl IntoView {
         }
     });
     let username = move || user.read(cx).and_then(|u| u).map(|u| u.map(|u| u.username));
+    let avatar = move || {
+        view! { cx,
+            <Transition fallback=move || view! { cx, <p>"Loading..."</p> }>
+                <ErrorBoundary
+                    // FIXME: error handling
+                    fallback=move |cx, errors| view! { cx,
+                        <a href="/login" class="btn btn-ghost">"Login"</a>
+                    }
+                >
+                    {move || match username() {
+                        Some(username) => {
+                            view! { cx,
+                                <div class="flex items-center">
+                                    <span class="text-gray-300 text-sm pr-2">{username}</span>
+                                </div>
+                            }.into_view(cx)
+                        }
+                        None => {
+                            view! { cx,
+                                <a href="/login" class="btn btn-ghost">"Login"</a>
+                            }.into_view(cx)
+                        }
+                    }}
+                </ErrorBoundary>
+            </Transition>
+        }
+    };
 
     view! { cx,
-        <nav class="bg-gray-800">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center h-16">
-                    <div class="flex items-center">
-                        <a href="/" class="text-white font-semibold text-lg">"Voting System"</a>
-                    </div>
-                    <div class="hidden md:block">
-                        <div class="ml-4 flex items-center space-x-4">
-                            <a href="/topics" class=link_style>"Topics"</a>
-                            <a href="/about" class=link_style>"About"</a>
-                        </div>
-                    </div>
-                    <div class="flex flex-grow" />
-                    <div class="flex">
-                        <Transition fallback=move || view! { cx, <p>"Loading..."</p> }>
-                            <ErrorBoundary
-                                // FIXME: error handling
-                                fallback=move |cx, _errors| view! {cx, <a href="/login" class=link_style>"Login"</a> }>
-                                {move || match username() {
-                                    Some(username) => {
-                                        view! { cx,
-                                            <div class="flex items-center">
-                                                <span class="text-gray-300 text-sm pr-2">{username}</span>
-                                            </div>
-                                        }.into_view(cx)
-                                    }
-                                    None => {
-                                        view! {cx, <a href="/login" class=link_style>"Login"</a> }
-                                            .into_view(cx)
-                                    }
-                                }}
-
-                            </ErrorBoundary>
-                        </Transition>
+        <nav class="navbar bg-gray-800 px-2">
+            <div class="flex-1">
+                <a href="/" class="btn btn-ghost text-xl">"Voting System"</a>
+                <div class="hidden md:block">
+                    <div class="ml-4 flex items-center space-x-4">
+                        <a href="/topics" class="btn btn-ghost">"Topics"</a>
+                        <a href="/about" class="btn btn-ghost">"About"</a>
                     </div>
                 </div>
+            </div>
+            <div class="flex-none">
+                {avatar}
             </div>
         </nav>
     }
@@ -314,23 +316,29 @@ fn CreateTopicPage(cx: Scope) -> impl IntoView {
         create_topic.dispatch(CreateTopic { input });
     };
 
-    let input_style = "w-full border-gray-300 rounded-md p-2";
+    let input_style = "input input-bordered input-info w-full max-w-md";
 
     view! { cx,
         <div class="max-w-md mx-auto mt-8">
-        <div class="bg-white rounded-lg shadow-md p-8">
+        <div class="rounded-lg shadow-md p-8">
             <h2 class="text-2xl font-semibold mb-6">"Create Topic"</h2>
             <form on:submit=on_submit>
                 <div class="mb-4">
-                    <label for="description" class="block text-gray-700 text-sm font-medium mb-2">"Description"</label>
+                    <label for="description" class="">
+                        <span class="label-text">"Description"</span>
+                    </label>
                     <input type="text" id="description" name="description" node_ref=description class=input_style required />
                 </div>
                 <div class="mb-4">
-                    <label for="starts_at" class="block text-gray-700 text-sm font-medium mb-2">"Starts At"</label>
+                    <label for="starts_at" class="">
+                        <span class="label-text">"Starts At"</span>
+                    </label>
                     <input type="datetime-local" id="starts_at" name="starts_at" node_ref=starts_at class=input_style required />
                 </div>
                 <div class="mb-4">
-                    <label for="ends_at" class="block text-gray-700 text-sm font-medium mb-2">"Ends At"</label>
+                    <label for="ends_at" class="">
+                        <span class="label-text">"Ends At"</span>
+                    </label>
                     <input type="datetime-local" id="ends_at" name="ends_at" node_ref=ends_at class=input_style required />
                 </div>
                 <div>
@@ -358,7 +366,7 @@ fn CreateTopicPage(cx: Scope) -> impl IntoView {
                                         />
                                         <textarea
                                             name="option-description[]"
-                                            class=format!("{input_style} mt-2")
+                                            class="textarea textarea-info mt-2 w-full max-w-md"
                                             placeholder="Option Description"
                                             on:input=move |ev| {
                                                 set_option.update(|opt| {
@@ -375,7 +383,7 @@ fn CreateTopicPage(cx: Scope) -> impl IntoView {
                     <button
                         type="button"
                         id="add-option"
-                        class="bg-blue-500 text-white py-2 px-4 rounded-md"
+                        class="btn btn-info py-2 px-4"
                         on:click=add_option
                     >
                         "Add Option"
@@ -384,7 +392,7 @@ fn CreateTopicPage(cx: Scope) -> impl IntoView {
                 <div class="mt-6">
                     <button
                         type="submit"
-                        class="bg-green-500 text-white py-2 px-4 rounded-md w-full"
+                        class="btn btn-success py-2 px-4 w-full"
                     >
                         "Create"
                     </button>
@@ -416,29 +424,34 @@ fn LoginPage(cx: Scope) -> impl IntoView {
         create_access_token.dispatch(CreateAccessToken { input });
     };
 
-    let label_style = "block text-gray-700 text-sm font-medium mb-2";
-    let input_style = "w-full border-gray-300 rounded-md p-2";
+    let input_style = "input input-bordered input-info w-full max-w-md";
 
     view! { cx,
         <div class="max-w-md mx-auto mt-8">
-            <div class="bg-white rounded-lg shadow-md p-8">
+            <div class="rounded-lg shadow-md p-8">
                 <h2 class="text-2xl font-semibold mb-6">"Login"</h2>
                 <form on:submit=on_submit>
                     <div class="mb-4">
-                        <label for="username" class=label_style>"Username / Email"</label>
-                        <input type="username" node_ref=username class=input_style required />
+                        <label for="username">
+                            <div class="label-text">"Username / Email"</div>
+                        </label>
+                        <input id="username" type="username" node_ref=username class=input_style required />
                     </div>
                     <div class="mb-6">
-                        <label for="password" class=label_style>"Password"</label>
-                        <input type="password" node_ref=password class=input_style required />
+                        <label for="password">
+                            <div class="label-text">"Password"</div>
+                        </label>
+                        <input id="password" type="password" node_ref=password class=input_style required />
                     </div>
                     <div>
-                        <button type="submit" class="bg-blue-500 text-white py-2 px-4 rounded-md w-full">"Login"</button>
+                        <button type="submit" class="btn btn-primary py-2 px-4 w-full">
+                            "Login"
+                        </button>
                     </div>
                 </form>
                 <div class="mt-4 text-center">
-                    <span class="text-gray-500">"Don't have an account? "</span>
-                    <a href="/signup" class="text-blue-500 font-medium">"Signup"</a>
+                    <span>"Don't have an account? "</span>
+                    <a href="/signup" class="link link-info">"Signup"</a>
                 </div>
             </div>
         </div>
@@ -446,16 +459,18 @@ fn LoginPage(cx: Scope) -> impl IntoView {
         <ErrorBoundary
             // ref: https://leptos-rs.github.io/leptos/view/07_errors.html?highlight=error%20handling#errorboundary
             fallback=|cx, errors| view! { cx,
-                <div class="m-2 border border-red-700 bg-red-400">
-                    <p>"Login failed! Errors: "</p>
-                    // we can render a list of errors as strings, if we'd like
-                    <ul>
-                        {move || errors.get()
-                            .into_iter()
-                            .map(|(_, e)| view! { cx, <li>{e.to_string()}</li>})
-                            .collect_view(cx)
-                        }
-                    </ul>
+                <div class="alert alert-error p-4">
+                    <div>
+                        <h3>"Login failed!"</h3>
+                        // we can render a list of errors as strings, if we'd like
+                        <ul>
+                            {move || errors.get()
+                                .into_iter()
+                                .map(|(_, e)| view! { cx, <li>{e.to_string()}</li>})
+                                .collect_view(cx)
+                            }
+                        </ul>
+                    </div>
                 </div>
             }
         >
@@ -500,27 +515,33 @@ fn SignupPage(cx: Scope) -> impl IntoView {
     };
 
     let label_style = "block text-gray-700 text-sm font-medium mb-2";
-    let input_style = "w-full border-gray-300 rounded-md p-2";
+    let input_style = "input input-bordered input-info w-full max-w-md";
 
     view! { cx,
         <div class="max-w-md mx-auto mt-8">
-            <div class="bg-white rounded-lg shadow-md p-8">
+            <div class="rounded-lg shadow-md p-8">
                 <h2 class="text-2xl font-semibold mb-6">"Signup"</h2>
                 <form on:submit=on_submit>
                     <div class="mb-4">
-                        <label for="username" class=label_style>"Username"</label>
+                        <label for="username" class=label_style>
+                            <span class="label-text">"Username"</span>
+                        </label>
                         <input type="username" node_ref=username class=input_style required />
                     </div>
                     <div class="mb-6">
-                        <label for="email" class=label_style>"Email"</label>
+                        <label for="email" class=label_style>
+                            <span class="label-text">"Email"</span>
+                        </label>
                         <input type="email" node_ref=email class=input_style required />
                     </div>
                     <div class="mb-6">
-                        <label for="password" class=label_style>"Password"</label>
+                        <label for="password" class=label_style>
+                            <span class="label-text">"Password"</span>
+                        </label>
                         <input type="password" node_ref=password class=input_style required />
                     </div>
                     <div>
-                        <button type="submit" class="bg-blue-500 text-white py-2 px-4 rounded-md w-full">
+                        <button type="submit" class="btn btn-primary py-2 px-4 rounded-md w-full">
                             {move || if signup_pending() {
                                 "Loading..."
                             } else {
@@ -530,8 +551,8 @@ fn SignupPage(cx: Scope) -> impl IntoView {
                     </div>
                 </form>
                 <div class="mt-4 text-center">
-                    <span class="text-gray-500">"Already have an account? "</span>
-                    <a href="/login" class="text-blue-500 font-medium">
+                    <span>"Already have an account? "</span>
+                    <a href="/login" class="link link-info">
                         "Login"
                     </a>
                 </div>
