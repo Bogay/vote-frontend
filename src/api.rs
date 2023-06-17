@@ -181,3 +181,64 @@ pub async fn get_me(token: String) -> Result<User, ServerFnError> {
 
     Ok(user)
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Comment {
+    pub id: String,
+    pub user_id: String,
+    pub content: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetCommentsInput {
+    pub topic_id: String,
+}
+
+#[server(GetComments, "/api")]
+pub async fn get_comments(input: GetCommentsInput) -> Result<Vec<Comment>, ServerFnError> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("{}/comment", base_url()))
+        .query(&input)
+        .send()
+        .await
+        .unwrap();
+    if resp.status() != reqwest::StatusCode::OK {
+        return Err(ServerFnError::ServerError(format!(
+            "get comments failed: {resp:?}"
+        )));
+    }
+    let comments = resp
+        .json::<Vec<Comment>>()
+        .await
+        .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;
+
+    Ok(comments)
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CreateCommentInput {
+    pub topic_id: String,
+    pub content: String,
+}
+
+#[server(CreateComment, "/api")]
+pub async fn create_comment(token: String, input: CreateCommentInput) -> Result<(), ServerFnError> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{}/comment", base_url()))
+        .bearer_auth(token)
+        .json(&input)
+        .send()
+        .await
+        .unwrap();
+
+    if resp.status() != reqwest::StatusCode::OK {
+        return Err(ServerFnError::ServerError(format!(
+            "create comment failed: {resp:?}"
+        )));
+    }
+
+    Ok(())
+}

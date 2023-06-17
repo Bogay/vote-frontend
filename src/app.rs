@@ -4,8 +4,9 @@ use leptos_meta::*;
 use leptos_router::*;
 
 use crate::api::{
-    create_vote, get_me, get_one_topic, get_topics, CreateAccessToken, CreateOptionInput,
-    CreateTopic, CreateTopicInput, CreateVoteInput, OAuth2PasswordRequest, Signup, SignupInput,
+    create_vote, get_comments, get_me, get_one_topic, get_topics, Comment, CreateAccessToken,
+    CreateComment, CreateCommentInput, CreateOptionInput, CreateTopic, CreateTopicInput,
+    CreateVote, CreateVoteInput, GetCommentsInput, OAuth2PasswordRequest, Signup, SignupInput,
     Topic, VoteOption,
 };
 
@@ -146,69 +147,87 @@ fn HomePage(cx: Scope) -> impl IntoView {
 fn TopicPage(cx: Scope) -> impl IntoView {
     let params = use_params_map(cx);
     let id = params.with(|params| params.get("id").unwrap().to_string());
-    let topic = {
-        let id = id.clone();
-        create_resource(
-            cx,
-            || (),
-            move |_| {
-                let id = id.clone();
-                async move { get_one_topic(id).await }
-            },
-        )
+    let (id, _) = create_signal(cx, id);
+    let topic = { create_resource(cx, || (), move |_| async move { get_one_topic(id()).await }) };
+    let comments = create_resource(
+        cx,
+        || (),
+        move |_| async move { get_comments(GetCommentsInput { topic_id: id() }).await },
+    );
+    let comments_view = move || {
+        comments.read(cx).map(|comments| {
+            comments.map(|comments| {
+                if comments.is_empty() {
+                    view! { cx,
+                        <p>"No comments"</p>
+                    }
+                    .into_view(cx)
+                } else {
+                    comments
+                        .into_iter()
+                        .map(|comment| {
+                            let (comment, _) = create_signal(cx, comment);
+                            view! { cx, <CommentCard comment=comment /> }
+                        })
+                        .collect_view(cx)
+                }
+            })
+        })
     };
 
     view! { cx,
-        <div class="p-4 md:p-16 flex flex-col w-full item-center mx-auto">
-            <ErrorBoundary
-                fallback=move |cx, errors| view! { cx, <div>"Error"</div>}
-            >
-                <Transition
-                    fallback=move || view! { cx, <p>"Loading..."</p>}
-                >
-                    {move || topic.read(cx).map(|topic| {
-                        view! { cx,
-                            {topic.map(|topic| {
-                                let (topic, _) = create_signal(cx, topic);
-                                // topic card
-                                let topic_card = {
-                                    view! { cx,
-                                        <TopicCard topic=topic show_action=false />
-                                    }.into_view(cx)
-                                };
-                                // options & votes
-                                let option_cards = topic().options.iter().map(|opt| {
-                                    let (opt, _) = create_signal(cx, opt.clone());
-                                    let topic = topic();
-                                    let vote = move |_| {
-                                        let topic_id = topic.id.clone();
-                                        spawn_local(async move {
-                                            let input = CreateVoteInput {
-                                                topic_id: topic_id.clone(),
-                                                option_id: opt().id,
-                                            };
-                                            let goto = use_navigate(cx);
-                                            // FIXME: error handling
-                                            let _ = create_vote(input).await;
-                                            let _ = goto(&format!("/topic/{}", topic_id.clone()), NavigateOptions::default(),);
-                                        });
+        <Transition fallback=move || view! { cx, <p>"Loading..." <span class="loading loading-spinner"></span></p> }>
+            <ErrorList error_title="Topic Page".to_string()>
+                {move || topic.read(cx).map(move |topic| {
+                    topic.map(|topic| {
+                        let (topic, _) = create_signal(cx, topic);
+                        let topic_card = {
+                            view! { cx,
+                                <TopicCard topic=topic show_action=false />
+                            }.into_view(cx)
+                        };
+                        let option_cards = topic().options.iter().map(|opt| {
+                            let (opt, _) = create_signal(cx, opt.clone());
+                            let topic = topic();
+                            let vote = move |_| {
+                                let topic_id = topic.id.clone();
+                                spawn_local(async move {
+                                    let input = CreateVoteInput {
+                                        topic_id: topic_id.clone(),
+                                        option_id: opt().id,
                                     };
-                                    view! { cx,
-                                        <OptionCard option=opt action=Some(vote) />
-                                    }
-                                }).collect_view(cx);
-                                // comments
+                                    let goto = use_navigate(cx);
+                                    // FIXME: error handling
+                                    let _ = create_vote(input).await;
+                                    let _ = goto(&format!("/topic/{}", topic_id.clone()), NavigateOptions::default(),);
+                                });
+                            };
+                            view! { cx,
+                                <OptionCard option=opt action=Some(vote) />
+                            }
+                        }).collect_view(cx);
 
-                                view! { cx,
+                        view! { cx,
+                            <div class="p-4 md:p-16  w-full mx-auto grid grid-cols-2">
+                                <div class="flex flex-col item-center">
                                     {topic_card}
                                     {option_cards}
-                                }
-                            })}
+                                </div>
+                                <div class="flex flex-col">
+                                    {comments_view}
+                                    <CreateCommentCard
+                                        id=id()
+                                        // FIXME: reloading comments
+                                        // comments.refetch()
+                                        after_submit=|_| {}
+                                    />
+                                </div>
+                            </div>
                         }
-                    })}
-                </Transition>
-            </ErrorBoundary>
-        </div>
+                    })
+                })}
+            </ErrorList>
+        </Transition>
     }
 }
 
@@ -276,6 +295,80 @@ where
                     </div>
                 }
             })}
+        </div>
+    }
+}
+
+#[component]
+fn CommentCard(cx: Scope, #[prop(into)] comment: Signal<Comment>) -> impl IntoView {
+    view! { cx,
+        <div class="card">
+            <div class="card-body">
+                <p>{comment().content}</p>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn CreateCommentCard<F>(cx: Scope, id: String, after_submit: F) -> impl IntoView
+where
+    F: Fn(MouseEvent) + 'static,
+{
+    let (id, _) = create_signal(cx, id);
+    let (content, set_content) = create_signal(cx, "".to_string());
+    let create_comment = create_server_action::<CreateComment>(cx);
+    let create_comment_pending = create_comment.pending();
+    let state = expect_context::<RwSignal<GlobalState>>(cx);
+    let is_login = move || state().token().is_some();
+
+    let on_submit = move |ev| {
+        if !is_login() {
+            return;
+        }
+
+        create_comment.dispatch(CreateComment {
+            token: state().token().unwrap().to_string(),
+            input: CreateCommentInput {
+                topic_id: id(),
+                content: content(),
+            },
+        });
+
+        set_content("".to_string());
+
+        after_submit(ev);
+    };
+    let submit_btn_label = move || {
+        if is_login() {
+            if create_comment_pending() {
+                "Loading..."
+            } else {
+                "Submit"
+            }
+        } else {
+            "Login to continue"
+        }
+    };
+
+    view! { cx,
+        <div class="card">
+            <h2 class="card-title">"Leave your comment here:"</h2>
+            <textarea
+                class="textarea"
+                on:input = move |ev| {
+                    set_content(event_target_value(&ev));
+                }
+                prop:value=content
+            />
+            <button
+                class:btn-disabled=move || !is_login()
+                class:btn-primary=is_login
+                on:click=on_submit
+                class="btn"
+            >
+                {submit_btn_label}
+            </button>
         </div>
     }
 }
