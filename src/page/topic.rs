@@ -1,0 +1,232 @@
+use crate::api::{
+    create_vote, get_comments, get_one_topic, CreateOptionInput, CreateTopic, CreateTopicInput,
+    CreateVoteInput, GetCommentsInput,
+};
+use crate::component::*;
+use leptos::ev::SubmitEvent;
+use leptos::*;
+use leptos_router::*;
+
+#[component]
+pub fn TopicPage(cx: Scope) -> impl IntoView {
+    let params = use_params_map(cx);
+    let id = params.with(|params| params.get("id").unwrap().to_string());
+    let (id, _) = create_signal(cx, id);
+    let topic = { create_resource(cx, || (), move |_| async move { get_one_topic(id()).await }) };
+    let comments = create_resource(
+        cx,
+        || (),
+        move |_| async move { get_comments(GetCommentsInput { topic_id: id() }).await },
+    );
+    let comments_view = move || {
+        comments.read(cx).map(|comments| {
+            comments.map(|comments| {
+                if comments.is_empty() {
+                    view! { cx,
+                        <p>"No comments"</p>
+                    }
+                    .into_view(cx)
+                } else {
+                    comments
+                        .into_iter()
+                        .map(|comment| {
+                            let (comment, _) = create_signal(cx, comment);
+                            view! { cx, <CommentCard comment=comment /> }
+                        })
+                        .collect_view(cx)
+                }
+            })
+        })
+    };
+
+    view! { cx,
+        <Transition fallback=move || view! { cx, <p>"Loading..." <span class="loading loading-spinner"></span></p> }>
+            <ErrorList error_title="Topic Page".to_string()>
+                {move || topic.read(cx).map(move |topic| {
+                    topic.map(|topic| {
+                        let (topic, _) = create_signal(cx, topic);
+                        let topic_card = {
+                            view! { cx,
+                                <TopicCard topic=topic show_action=false />
+                            }.into_view(cx)
+                        };
+                        let option_cards = topic().options.iter().map(|opt| {
+                            let (opt, _) = create_signal(cx, opt.clone());
+                            let topic = topic();
+                            let vote = move |_| {
+                                let topic_id = topic.id.clone();
+                                spawn_local(async move {
+                                    let input = CreateVoteInput {
+                                        topic_id: topic_id.clone(),
+                                        option_id: opt().id,
+                                    };
+                                    let goto = use_navigate(cx);
+                                    // FIXME: error handling
+                                    let _ = create_vote(input).await;
+                                    let _ = goto(&format!("/topic/{}", topic_id.clone()), NavigateOptions::default(),);
+                                });
+                            };
+                            view! { cx,
+                                <OptionCard option=opt action=Some(vote) />
+                            }
+                        }).collect_view(cx);
+
+                        view! { cx,
+                            <div class="p-4 md:p-16  w-full mx-auto grid grid-cols-2">
+                                <div class="flex flex-col item-center">
+                                    {topic_card}
+                                    {option_cards}
+                                </div>
+                                <div class="flex flex-col">
+                                    {comments_view}
+                                    <CreateCommentCard
+                                        id=id()
+                                        // FIXME: reloading comments
+                                        // comments.refetch()
+                                        after_submit=|_| {}
+                                    />
+                                </div>
+                            </div>
+                        }
+                    })
+                })}
+            </ErrorList>
+        </Transition>
+    }
+}
+
+#[component]
+pub fn CreateTopicPage(cx: Scope) -> impl IntoView {
+    use leptos::html::Input;
+
+    let description: NodeRef<Input> = create_node_ref(cx);
+    let starts_at: NodeRef<Input> = create_node_ref(cx);
+    let ends_at: NodeRef<Input> = create_node_ref(cx);
+
+    // let init_options = vec![(0, create_signal(cx, CreateOptionInput::default()))];
+    let init_options = vec![];
+    let (options, set_options) = create_signal(cx, init_options);
+    let mut next_id = 1;
+    let add_option = move |_| {
+        set_options.update(move |options| {
+            options.push((next_id, create_signal(cx, CreateOptionInput::default())));
+        });
+        next_id += 1;
+    };
+
+    let create_topic = create_server_action::<CreateTopic>(cx);
+    let create_topic_result = create_topic.value();
+    let on_submit = move |ev: SubmitEvent| {
+        ev.prevent_default();
+
+        let description = description().expect("<input> to exist").value();
+        let starts_at = starts_at().expect("<input> to exist").value();
+        let ends_at = ends_at().expect("<input> to exist").value();
+        let options = options().into_iter().map(|(_, (opt, _))| opt()).collect();
+
+        let input = CreateTopicInput {
+            description,
+            starts_at,
+            ends_at,
+            options,
+        };
+
+        create_topic.dispatch(CreateTopic { input });
+    };
+
+    let input_style = "input input-bordered input-info w-full max-w-md";
+
+    view! { cx,
+        <div class="max-w-md mx-auto mt-8">
+            <div class="rounded-lg shadow-md p-8">
+                <h2 class="text-2xl font-semibold mb-6">"Create Topic"</h2>
+                <form on:submit=on_submit>
+                    <div class="mb-4">
+                        <label for="description" class="">
+                            <span class="label-text">"Description"</span>
+                        </label>
+                        <input type="text" id="description" name="description" node_ref=description class=input_style required />
+                    </div>
+                    <div class="mb-4">
+                        <label for="starts_at" class="">
+                            <span class="label-text">"Starts At"</span>
+                        </label>
+                        <input type="datetime-local" id="starts_at" name="starts_at" node_ref=starts_at class=input_style required />
+                    </div>
+                    <div class="mb-4">
+                        <label for="ends_at" class="">
+                            <span class="label-text">"Ends At"</span>
+                        </label>
+                        <input type="datetime-local" id="ends_at" name="ends_at" node_ref=ends_at class=input_style required />
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold mb-2">"Options"</h3>
+                        <div id="options-container">
+                            <For
+                                each=options
+                                key=|option| option.0
+                                view=move |cx, (_, (option, set_option))| {
+                                    // seems to be a bug, this value is actually used
+                                    #[allow(unused)]
+                                    let option = option();
+                                    view! { cx,
+                                        <div class="mb-4">
+                                            <input
+                                                type="text"
+                                                name="option-label[]"
+                                                class=input_style
+                                                placeholder="Option Label"
+                                                prop:value=option.label
+                                                on:input=move |ev| {
+                                                    set_option.update(|opt| {
+                                                        opt.label = event_target_value(&ev);
+                                                    })
+                                                }
+                                                required
+                                            />
+                                            <textarea
+                                                name="option-description[]"
+                                                class="textarea textarea-info mt-2 w-full max-w-md"
+                                                placeholder="Option Description"
+                                                on:input=move |ev| {
+                                                    set_option.update(|opt| {
+                                                        opt.description = event_target_value(&ev);
+                                                    })
+                                                }
+                                                prop:value=option.description
+                                            ></textarea>
+                                        </div>
+                                    }
+                                }
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            id="add-option"
+                            class="btn btn-info py-2 px-4"
+                            on:click=add_option
+                        >
+                            "Add Option"
+                        </button>
+                    </div>
+                    <div class="mt-6">
+                        <button
+                            type="submit"
+                            class="btn btn-success py-2 px-4 w-full"
+                        >
+                            "Create"
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <ErrorList error_title="Create Topic Failed".to_string()>
+            {move || create_topic_result().map(|resp| resp.map(|_| {
+                let goto = use_navigate(cx);
+                // FIXME: error handling
+                goto("/", NavigateOptions::default())
+            }))}
+        </ErrorList>
+    }
+}

@@ -1,5 +1,7 @@
 pub mod api;
 pub mod app;
+pub mod component;
+pub mod page;
 pub mod state;
 use cfg_if::cfg_if;
 
