@@ -1,6 +1,6 @@
 use leptos::{ServerFnError, *};
 use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
+use std::{collections::HashMap, sync::OnceLock};
 
 // base url is not used in client code
 
@@ -141,6 +141,40 @@ pub async fn get_my_vote(token: String, input: GetMyVoteInput) -> Result<Vote, S
 
     let vote = resp
         .json::<Vote>()
+        .await
+        .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;
+
+    Ok(vote)
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetVoteResultInput {
+    pub topic_id: String,
+}
+
+#[server(GetVoteResult, "/api")]
+pub async fn get_vote_result(
+    input: GetVoteResultInput,
+) -> Result<HashMap<String, usize>, ServerFnError> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!(
+            "{}/topic/{}/vote-result",
+            base_url(),
+            input.topic_id
+        ))
+        .send()
+        .await
+        .unwrap();
+
+    if resp.status() != reqwest::StatusCode::OK {
+        return Err(ServerFnError::ServerError(format!(
+            "get vote result failed: {resp:?}"
+        )));
+    }
+
+    let vote = resp
+        .json::<HashMap<String, usize>>()
         .await
         .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;
 

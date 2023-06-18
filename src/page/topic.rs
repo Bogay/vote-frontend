@@ -1,6 +1,6 @@
 use crate::api::{
-    get_comments, get_my_vote, get_one_topic, CreateOptionInput, CreateTopic, CreateTopicInput,
-    CreateVote, CreateVoteInput, GetCommentsInput,
+    get_comments, get_my_vote, get_one_topic, get_vote_result, CreateOptionInput, CreateTopic,
+    CreateTopicInput, CreateVote, CreateVoteInput, GetCommentsInput,
 };
 use crate::component::*;
 use crate::state::GlobalState;
@@ -45,6 +45,9 @@ pub fn TopicPage(cx: Scope) -> impl IntoView {
             )
         },
     );
+    let vote_result = create_local_resource(cx, id, move |id| async move {
+        get_vote_result(crate::api::GetVoteResultInput { topic_id: id }).await
+    });
     let comments = create_resource(cx, id, move |id| async move {
         get_comments(GetCommentsInput { topic_id: id }).await
     });
@@ -114,25 +117,47 @@ pub fn TopicPage(cx: Scope) -> impl IntoView {
                                 });
                             };
                             let extra_class = my_vote.as_ref().and_then(|v| (opt().id == v.option_id).then(|| "bg-primary")).unwrap_or_default();
-                            view! { cx,
-                                <OptionCard
-                                    option=opt
-                                    extra_class=extra_class.to_string()
-                                    action=Some(move || view! { cx,
-                                        <button
-                                            class="btn"
-                                            on:click=vote
-                                            class:btn-disabled=move ||create_vote_pending() || !is_login()
-                                            class:btn-info=move || !create_vote_pending() && is_login()
-                                        >
-                                            {move || if create_vote_pending() {
-                                                "Loading..."
-                                            } else {
-                                                "+1"
-                                            }}
-                                        </button>
-                                    })
-                                />
+                            if let Some(Ok(vote_result)) = vote_result.read(cx) {
+                                let total = vote_result.values().sum::<usize>();
+                                let cnt = *vote_result.get(&opt().id).unwrap();
+                                let ratio = if total == 0 {
+                                    0.0
+                                } else {
+                                    cnt as f64 / total as f64
+                                } * 100.0;
+                                view! { cx,
+                                    <div class="card card-compact w-96 m-4">
+                                        <div class="card-body">
+                                            <div class="card-title">
+                                                {opt().label}
+                                            </div>
+                                            <p>{opt().description}</p>
+                                            <progress class="progress progress-primary" value=cnt max=total></progress>
+                                            <span>{format!("{ratio:.2}%")}</span>
+                                        </div>
+                                    </div>
+                                }.into_view(cx)
+                            } else {
+                                view! { cx,
+                                    <OptionCard
+                                        option=opt
+                                        extra_class=extra_class.to_string()
+                                        action=Some(move || view! { cx,
+                                            <button
+                                                class="btn"
+                                                on:click=vote
+                                                class:btn-disabled=move ||create_vote_pending() || !is_login()
+                                                class:btn-info=move || !create_vote_pending() && is_login()
+                                            >
+                                                {move || if create_vote_pending() {
+                                                    "Loading..."
+                                                } else {
+                                                    "+1"
+                                                }}
+                                            </button>
+                                        })
+                                    />
+                                }.into_view(cx)
                             }
                         }).collect_view(cx);
 
@@ -160,9 +185,6 @@ pub fn TopicPage(cx: Scope) -> impl IntoView {
                                     />}}
                                 </div>
                             </div>
-                            // {create_vote_result().map(|r| r.map(|_| {
-                            //     refetch();
-                            // }))}
                         }
                     })
                 })}
