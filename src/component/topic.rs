@@ -39,13 +39,14 @@ pub fn TopicCard(
 }
 
 #[component]
-pub fn OptionCard<F>(
+pub fn OptionCard<F, IV>(
     cx: Scope,
     #[prop(into)] option: Signal<VoteOption>,
     #[prop(default = None)] action: Option<F>,
 ) -> impl IntoView
 where
-    F: FnMut(MouseEvent) -> () + 'static,
+    F: Fn() -> IV + 'static,
+    IV: IntoView,
 {
     let option = option();
 
@@ -60,10 +61,7 @@ where
             {action.map(|action| {
                 view! { cx,
                     <div class="card-actions justify-end">
-                        <button
-                            class="btn btn-sm btn-square btn-accent"
-                            on:click=action
-                        >"+"</button>
+                        {action}
                     </div>
                 }
             })}

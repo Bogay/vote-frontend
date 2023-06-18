@@ -91,10 +91,11 @@ pub struct CreateVoteInput {
 }
 
 #[server(CreateVote, "/api")]
-pub async fn create_vote(input: CreateVoteInput) -> Result<(), ServerFnError> {
+pub async fn create_vote(token: String, input: CreateVoteInput) -> Result<(), ServerFnError> {
     let client = reqwest::Client::new();
     let resp = client
         .post(format!("{}/vote", base_url()))
+        .bearer_auth(token)
         .json(&input)
         .send()
         .await

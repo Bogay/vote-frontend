@@ -1,18 +1,24 @@
 use crate::api::{
-    create_vote, get_comments, get_one_topic, CreateOptionInput, CreateTopic, CreateTopicInput,
+    get_comments, get_one_topic, CreateOptionInput, CreateTopic, CreateTopicInput, CreateVote,
     CreateVoteInput, GetCommentsInput,
 };
 use crate::component::*;
+use crate::state::GlobalState;
 use leptos::ev::SubmitEvent;
 use leptos::*;
 use leptos_router::*;
 
 #[component]
 pub fn TopicPage(cx: Scope) -> impl IntoView {
+    let state = expect_context::<RwSignal<GlobalState>>(cx);
+    let is_login = move || state().token().is_some();
     let params = use_params_map(cx);
     let id = params.with(|params| params.get("id").unwrap().to_string());
     let (id, _) = create_signal(cx, id);
     let topic = { create_resource(cx, || (), move |_| async move { get_one_topic(id()).await }) };
+    let create_vote = create_server_action::<CreateVote>(cx);
+    let create_vote_pending = create_vote.pending();
+    let create_vote_result = create_vote.value();
     let comments = create_resource(
         cx,
         || (),
@@ -52,22 +58,38 @@ pub fn TopicPage(cx: Scope) -> impl IntoView {
                         };
                         let option_cards = topic().options.iter().map(|opt| {
                             let (opt, _) = create_signal(cx, opt.clone());
-                            let topic = topic();
                             let vote = move |_| {
-                                let topic_id = topic.id.clone();
-                                spawn_local(async move {
-                                    let input = CreateVoteInput {
-                                        topic_id: topic_id.clone(),
-                                        option_id: opt().id,
-                                    };
-                                    let goto = use_navigate(cx);
-                                    // FIXME: error handling
-                                    let _ = create_vote(input).await;
-                                    let _ = goto(&format!("/topic/{}", topic_id.clone()), NavigateOptions::default(),);
+                                if create_vote_pending() {
+                                    return;
+                                }
+                                let topic_id = topic().id;
+                                let input = CreateVoteInput {
+                                    topic_id: topic_id.clone(),
+                                    option_id: opt().id,
+                                };
+                                create_vote.dispatch(CreateVote {
+                                    token: state().token().unwrap().to_string(),
+                                    input,
                                 });
                             };
                             view! { cx,
-                                <OptionCard option=opt action=Some(vote) />
+                                <OptionCard
+                                    option=opt
+                                    action=Some(move || view! { cx,
+                                        <button
+                                            class="btn"
+                                            on:click=vote
+                                            class:btn-disabled=move ||create_vote_pending() || !is_login()
+                                            class:btn-info=move || !create_vote_pending() && is_login()
+                                        >
+                                            {move || if create_vote_pending() {
+                                                "Loading..."
+                                            } else {
+                                                "+1"
+                                            }}
+                                        </button>
+                                    })
+                                />
                             }
                         }).collect_view(cx);
 
@@ -75,9 +97,17 @@ pub fn TopicPage(cx: Scope) -> impl IntoView {
                             <div class="p-4 md:p-16  w-full mx-auto grid grid-cols-2">
                                 <div class="flex flex-col item-center">
                                     {topic_card}
+                                    {move || (!is_login()).then(|| {
+                                        view! { cx,
+                                            <h2 class="text-center">
+                                                "Login to vote."
+                                            </h2>
+                                        }
+                                    })}
                                     {option_cards}
                                 </div>
                                 <div class="flex flex-col">
+                                    <h2>"Comments"</h2>
                                     {comments_view}
                                     <CreateCommentCard
                                         id=id()
@@ -87,6 +117,11 @@ pub fn TopicPage(cx: Scope) -> impl IntoView {
                                     />
                                 </div>
                             </div>
+                            {create_vote_result().map(|r| r.map(|_| {
+                                let goto = use_navigate(cx);
+                                // FIXME: error handling
+                                let _ = goto(&format!("/topic/{}", &topic().id), NavigateOptions::default());
+                            }))}
                         }
                     })
                 })}
