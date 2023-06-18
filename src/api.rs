@@ -14,14 +14,14 @@ fn base_url() -> &'static str {
     })
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct VoteOption {
     pub id: String,
     pub label: String,
     pub description: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Topic {
     pub id: String,
     pub description: String,
@@ -102,6 +102,43 @@ pub async fn create_vote(token: String, input: CreateVoteInput) -> Result<(), Se
         .unwrap();
 
     Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Vote {
+    pub id: String,
+    pub username: String,
+    pub topic_id: String,
+    pub option_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetMyVoteInput {
+    pub topic_id: String,
+}
+
+#[server(GetMyVote, "/api")]
+pub async fn get_my_vote(token: String, input: GetMyVoteInput) -> Result<Vote, ServerFnError> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("{}/topic/{}/my-vote", base_url(), input.topic_id))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+
+    if resp.status() != reqwest::StatusCode::OK {
+        return Err(ServerFnError::ServerError(format!(
+            "get my vote failed: {resp:?}"
+        )));
+    }
+
+    let vote = resp
+        .json::<Vote>()
+        .await
+        .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;
+
+    Ok(vote)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

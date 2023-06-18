@@ -57,22 +57,26 @@ where
 
     view! { cx,
         <div class="card">
-            <h2 class="card-title">"Leave your comment here:"</h2>
-            <textarea
-                class="textarea"
-                on:input = move |ev| {
-                    set_content(event_target_value(&ev));
-                }
-                prop:value=content
-            />
-            <button
-                class:btn-disabled=move || !is_login()
-                class:btn-primary=is_login
-                on:click=on_submit
-                class="btn"
-            >
-                {submit_btn_label}
-            </button>
+            <div class="card-body">
+                <h2 class="card-title">"Leave your comment here:"</h2>
+                <textarea
+                    class="textarea my-2"
+                    on:input = move |ev| {
+                        set_content(event_target_value(&ev));
+                    }
+                    prop:value=content
+                />
+            </div>
+            <div class="card-actions">
+                <button
+                    class:btn-disabled=move || !is_login()
+                    class:btn-primary=is_login
+                    on:click=on_submit
+                    class="btn w-full"
+                >
+                    {submit_btn_label}
+                </button>
+            </div>
         </div>
     }
 }

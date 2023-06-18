@@ -1,6 +1,6 @@
 use crate::api::{
-    get_comments, get_one_topic, CreateOptionInput, CreateTopic, CreateTopicInput, CreateVote,
-    CreateVoteInput, GetCommentsInput,
+    get_comments, get_my_vote, get_one_topic, CreateOptionInput, CreateTopic, CreateTopicInput,
+    CreateVote, CreateVoteInput, GetCommentsInput,
 };
 use crate::component::*;
 use crate::state::GlobalState;
@@ -15,21 +15,46 @@ pub fn TopicPage(cx: Scope) -> impl IntoView {
     let params = use_params_map(cx);
     let id = params.with(|params| params.get("id").unwrap().to_string());
     let (id, _) = create_signal(cx, id);
-    let topic = { create_resource(cx, || (), move |_| async move { get_one_topic(id()).await }) };
+    let topic = create_local_resource(cx, id, move |id| async move { get_one_topic(id).await });
     let create_vote = create_server_action::<CreateVote>(cx);
     let create_vote_pending = create_vote.pending();
     let create_vote_result = create_vote.value();
-    let comments = create_resource(
+    let my_vote = create_local_resource(
         cx,
-        || (),
-        move |_| async move { get_comments(GetCommentsInput { topic_id: id() }).await },
+        move || {
+            (
+                state().token().map(|t| t.to_string()),
+                topic.read(cx).and_then(|t| {
+                    // FIXME: error handling
+                    t.ok()
+                }),
+            )
+        },
+        move |(token, topic)| async move {
+            let (Some(token), Some(topic)) = (token, topic) else {
+                    return None;
+                };
+
+            Some(
+                get_my_vote(
+                    token.to_string(),
+                    crate::api::GetMyVoteInput { topic_id: topic.id },
+                )
+                .await,
+            )
+        },
     );
+    let comments = create_resource(cx, id, move |id| async move {
+        get_comments(GetCommentsInput { topic_id: id }).await
+    });
     let comments_view = move || {
         comments.read(cx).map(|comments| {
             comments.map(|comments| {
                 if comments.is_empty() {
                     view! { cx,
-                        <p>"No comments"</p>
+                        <p class="p-8 w-full text-center">
+                            "No comments"
+                        </p>
                     }
                     .into_view(cx)
                 } else {
@@ -45,6 +70,19 @@ pub fn TopicPage(cx: Scope) -> impl IntoView {
         })
     };
 
+    let refetch = move || {
+        topic.refetch();
+        my_vote.refetch();
+    };
+
+    create_effect(cx, move |_| {
+        let r = create_vote_result();
+        if r.is_some() {
+            refetch();
+        }
+        r
+    });
+
     view! { cx,
         <Transition fallback=move || view! { cx, <p>"Loading..." <span class="loading loading-spinner"></span></p> }>
             <ErrorList error_title="Topic Page".to_string()>
@@ -56,6 +94,8 @@ pub fn TopicPage(cx: Scope) -> impl IntoView {
                                 <TopicCard topic=topic show_action=false />
                             }.into_view(cx)
                         };
+                        // FIXME: error handling
+                        let my_vote = my_vote.read(cx).and_then(|v| v).and_then(|v| v.ok());
                         let option_cards = topic().options.iter().map(|opt| {
                             let (opt, _) = create_signal(cx, opt.clone());
                             let vote = move |_| {
@@ -68,13 +108,15 @@ pub fn TopicPage(cx: Scope) -> impl IntoView {
                                     option_id: opt().id,
                                 };
                                 create_vote.dispatch(CreateVote {
-                                    token: state().token().unwrap().to_string(),
+                                    token: state().token().expect("should not called if not logged in").to_string(),
                                     input,
                                 });
                             };
+                            let extra_class = my_vote.as_ref().and_then(|v| (opt().id == v.option_id).then(|| "bg-primary")).unwrap_or_default();
                             view! { cx,
                                 <OptionCard
                                     option=opt
+                                    extra_class=extra_class.to_string()
                                     action=Some(move || view! { cx,
                                         <button
                                             class="btn"
@@ -94,7 +136,7 @@ pub fn TopicPage(cx: Scope) -> impl IntoView {
                         }).collect_view(cx);
 
                         view! { cx,
-                            <div class="p-4 md:p-16  w-full mx-auto grid grid-cols-2">
+                            <div class="p-4 md:p-16 w-full mx-auto grid grid-cols-1 lg:grid-cols-2">
                                 <div class="flex flex-col item-center">
                                     {topic_card}
                                     {move || (!is_login()).then(|| {
@@ -107,21 +149,19 @@ pub fn TopicPage(cx: Scope) -> impl IntoView {
                                     {option_cards}
                                 </div>
                                 <div class="flex flex-col">
-                                    <h2>"Comments"</h2>
+                                    <h2 class="text-3xl pb-4">"Comments"</h2>
                                     {comments_view}
-                                    <CreateCommentCard
+                                    {move || view!{ cx, <CreateCommentCard
                                         id=id()
                                         // FIXME: reloading comments
                                         // comments.refetch()
                                         after_submit=|_| {}
-                                    />
+                                    />}}
                                 </div>
                             </div>
-                            {create_vote_result().map(|r| r.map(|_| {
-                                let goto = use_navigate(cx);
-                                // FIXME: error handling
-                                let _ = goto(&format!("/topic/{}", &topic().id), NavigateOptions::default());
-                            }))}
+                            // {create_vote_result().map(|r| r.map(|_| {
+                            //     refetch();
+                            // }))}
                         }
                     })
                 })}

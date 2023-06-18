@@ -1,5 +1,4 @@
 use crate::api::{Topic, VoteOption};
-use leptos::ev::MouseEvent;
 use leptos::*;
 use leptos_router::*;
 
@@ -43,20 +42,19 @@ pub fn OptionCard<F, IV>(
     cx: Scope,
     #[prop(into)] option: Signal<VoteOption>,
     #[prop(default = None)] action: Option<F>,
+    #[prop(optional)] extra_class: String,
 ) -> impl IntoView
 where
     F: Fn() -> IV + 'static,
     IV: IntoView,
 {
-    let option = option();
-
     view! { cx,
-        <div class="card card-compact w-96 bg-base-100 m-4">
-            <div class="card-title">
-                {option.label}
-            </div>
+        <div class=format!("card card-compact w-96 m-4 {extra_class}")>
             <div class="card-body">
-                <p>{option.description}</p>
+                <div class="card-title">
+                    {option().label}
+                </div>
+                <p>{option().description}</p>
             </div>
             {action.map(|action| {
                 view! { cx,
