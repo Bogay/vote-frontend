@@ -81,6 +81,12 @@ pub async fn create_topic(input: CreateTopicInput) -> Result<(), ServerFnError> 
         .await
         .unwrap();
 
+    if resp.status() != reqwest::StatusCode::OK {
+        return Err(ServerFnError::ServerError(format!(
+            "create vote failed: {resp:?}"
+        )));
+    }
+
     Ok(())
 }
 

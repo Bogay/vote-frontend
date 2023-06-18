@@ -4,6 +4,7 @@ use crate::api::{
 };
 use crate::component::*;
 use crate::state::GlobalState;
+use chrono::prelude::*;
 use leptos::ev::SubmitEvent;
 use leptos::*;
 use leptos_router::*;
@@ -199,10 +200,23 @@ pub fn CreateTopicPage(cx: Scope) -> impl IntoView {
         let ends_at = ends_at().expect("<input> to exist").value();
         let options = options().into_iter().map(|(_, (opt, _))| opt()).collect();
 
+        let now = Local::now();
+        let starts_at = DateTime::<Utc>::from_utc(
+            NaiveDateTime::parse_from_str(&starts_at, "%Y-%m-%dT%H:%M")
+                .expect("should be a datetime string"),
+            Utc,
+        ) - *now.offset();
+
+        let ends_at = DateTime::<Utc>::from_utc(
+            NaiveDateTime::parse_from_str(&ends_at, "%Y-%m-%dT%H:%M")
+                .expect("should be a datetime string"),
+            Utc,
+        ) - *now.offset();
+
         let input = CreateTopicInput {
             description,
-            starts_at,
-            ends_at,
+            starts_at: format!("{starts_at:?}"),
+            ends_at: format!("{ends_at:?}"),
             options,
         };
 
